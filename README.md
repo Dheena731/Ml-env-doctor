@@ -135,7 +135,7 @@ mlenvdoctor smoke-test
 pip install mlenvdoctor
 
 # From source
-git clone https://github.com/yourusername/ml_env_doctor.git
+git clone https://github.com/dheena731/ml_env_doctor.git
 cd ml_env_doctor
 pip install -e .
 ```
@@ -144,7 +144,7 @@ pip install -e .
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/ml_env_doctor.git
+git clone https://github.com/dheena731/ml_env_doctor.git
 cd ml_env_doctor
 
 # Install with dev dependencies
