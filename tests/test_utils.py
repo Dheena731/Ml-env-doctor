@@ -1,9 +1,5 @@
 """Tests for utils module."""
 
-import sys
-
-import pytest
-
 from mlenvdoctor.utils import (
     check_command_exists,
     format_size,

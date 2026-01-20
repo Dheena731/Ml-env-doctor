@@ -2,8 +2,7 @@
 
 import importlib
 import re
-import subprocess
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 try:
     import torch
@@ -12,16 +11,7 @@ except ImportError:
 
 from rich.table import Table
 
-from .utils import (
-    check_command_exists,
-    console,
-    format_size,
-    get_home_config_dir,
-    print_error,
-    print_info,
-    print_warning,
-    run_command,
-)
+from .utils import check_command_exists, console, format_size, get_home_config_dir, run_command
 
 
 class DiagnosticIssue:
@@ -159,15 +149,15 @@ def check_pytorch_cuda() -> List[DiagnosticIssue]:
             # Check PyTorch/CUDA version compatibility
             torch_major, torch_minor = map(int, torch_version.split(".")[:2])
             if torch_major < 2 or (torch_major == 2 and torch_minor < 4):
-                issues.append(
-                    DiagnosticIssue(
-                        name="PyTorch Version",
-                        status="WARN - Old version",
-                        severity="warning",
-                        fix=f"Upgrade: pip install torch>=2.4.0 --index-url https://download.pytorch.org/whl/cu124",
-                        details=f"Current: {torch_version}, Recommended: >=2.4.0",
-                    )
-                )
+                        issues.append(
+                            DiagnosticIssue(
+                                name="PyTorch Version",
+                                status="WARN - Old version",
+                                severity="warning",
+                                fix="Upgrade: pip install torch>=2.4.0 --index-url https://download.pytorch.org/whl/cu124",
+                                details=f"Current: {torch_version}, Recommended: >=2.4.0",
+                            )
+                        )
         else:
             issues.append(
                 DiagnosticIssue(
@@ -234,15 +224,15 @@ def check_ml_libraries() -> List[DiagnosticIssue]:
                         )
                 except (ImportError, Exception):
                     # If packaging not available, just check if module exists
-                    issues.append(
-                        DiagnosticIssue(
-                            name=f"{lib_name}",
-                            status=f"PASS - Installed",
-                            severity="info",
-                            fix="",
-                            details=f"Version: {version}",
+                        issues.append(
+                            DiagnosticIssue(
+                                name=f"{lib_name}",
+                                status="PASS - Installed",
+                                severity="info",
+                                fix="",
+                                details=f"Version: {version}",
+                            )
                         )
-                    )
             else:
                 issues.append(
                     DiagnosticIssue(
@@ -275,7 +265,6 @@ def check_gpu_memory() -> List[DiagnosticIssue]:
         free_mem, total_mem = torch.cuda.mem_get_info(0)
         free_gb = free_mem / (1024**3)
         total_gb = total_mem / (1024**3)
-        used_gb = total_gb - free_gb
 
         if free_gb < 8:
             issues.append(

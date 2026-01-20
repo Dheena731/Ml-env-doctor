@@ -3,9 +3,7 @@
 from pathlib import Path
 from typing import Optional
 
-from rich.console import Console
-
-from .utils import console, print_error, print_info, print_success
+from .utils import console, print_info, print_success
 
 # Model-specific templates
 MODEL_TEMPLATES = {
@@ -149,9 +147,9 @@ CMD ["python", "train.py"]
     console.print("[bold]Build and run:[/bold]")
     console.print(f"[cyan]  docker build -f {output_file} -t mlenvdoctor .[/cyan]")
     if service:
-        console.print(f"[cyan]  docker run --gpus all -p 8000:8000 mlenvdoctor[/cyan]")
+        console.print("[cyan]  docker run --gpus all -p 8000:8000 mlenvdoctor[/cyan]")
     else:
-        console.print(f"[cyan]  docker run --gpus all -v $(pwd)/data:/app/data mlenvdoctor[/cyan]")
+        console.print("[cyan]  docker run --gpus all -v $(pwd)/data:/app/data mlenvdoctor[/cyan]")
 
     return output_path
 

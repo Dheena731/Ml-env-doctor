@@ -7,7 +7,6 @@ from typing import List, Optional, Tuple
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.text import Text
 
 console = Console()
 

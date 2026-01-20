@@ -1,7 +1,7 @@
 """GPU benchmarks and smoke tests for ML Environment Doctor."""
 
 import time
-from typing import Dict, List, Optional
+from typing import Dict
 
 try:
     import torch
@@ -9,7 +9,6 @@ except ImportError:
     torch = None  # type: ignore
 
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from .utils import print_error, print_info, print_success
 
@@ -102,8 +101,7 @@ def smoke_test_lora() -> bool:
             # Forward pass
             with console.status("[bold green]Running forward pass..."):
                 with torch.no_grad():
-                    outputs = model(**inputs)
-                    loss = outputs.loss if hasattr(outputs, "loss") else None
+                    _ = model(**inputs)
 
             print_success("LoRA smoke test passed!")
             return True
@@ -169,7 +167,7 @@ def test_model(model_name: str = "tinyllama") -> bool:
                 inputs = tokenizer(dummy_text, return_tensors="pt").to(device)
 
                 with torch.no_grad():
-                    outputs = model(**inputs)
+                    _ = model(**inputs)
 
                 print_success(f"Model {actual_model_name} loaded and tested successfully!")
                 return True

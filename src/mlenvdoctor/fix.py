@@ -1,14 +1,10 @@
 """Auto-fix and requirements generation for ML Environment Doctor."""
 
-import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
-
-from .diagnose import DiagnosticIssue, diagnose_env
+from .diagnose import diagnose_env
 from .utils import (
     check_command_exists,
     console,
@@ -253,6 +249,6 @@ def auto_fix(use_conda: bool = False, create_venv: bool = False, stack: str = "t
         if install.lower() in ["y", "yes"]:
             return install_requirements(str(req_file), use_conda=use_conda)
         else:
-            print_info(f"Requirements file generated. Install manually with:")
+            print_info("Requirements file generated. Install manually with:")
             console.print(f"[cyan]  pip install -r {req_file}[/cyan]")
             return True

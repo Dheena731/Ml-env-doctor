@@ -1,7 +1,5 @@
 """Tests for diagnose module."""
 
-import pytest
-
 from mlenvdoctor.diagnose import DiagnosticIssue, diagnose_env
 
 
