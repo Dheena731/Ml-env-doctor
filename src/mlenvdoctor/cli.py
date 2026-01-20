@@ -8,7 +8,7 @@ from . import __version__
 from .diagnose import diagnose_env, print_diagnostic_table
 from .dockerize import generate_dockerfile, generate_service_template
 from .fix import auto_fix
-from .gpu import benchmark_gpu_ops, smoke_test_lora, test_model
+from .gpu import benchmark_gpu_ops, smoke_test_lora, test_model as gpu_test_model
 from .utils import console
 
 app = typer.Typer(
@@ -105,8 +105,8 @@ def dockerize(
     console.print("[bold green]✅ Dockerfile generated![/bold green]")
 
 
-@app.command()
-def test_model(
+@app.command(name="test-model")
+def test_model_cmd(
     model: str = typer.Argument("tinyllama", help="Model to test (tinyllama, gpt2, mistral-7b)"),
 ):
     """
@@ -115,7 +115,7 @@ def test_model(
     Tests model loading and forward pass to verify fine-tuning readiness.
     """
     console.print(f"[bold blue]🧪 Testing model: {model}[/bold blue]\n")
-    success = test_model(model_name=model)
+    success = gpu_test_model(model_name=model)
     if success:
         console.print()
         console.print("[bold green]✅ Model test passed! Ready for fine-tuning.[/bold green]")
