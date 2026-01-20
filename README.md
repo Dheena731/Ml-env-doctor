@@ -2,8 +2,8 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)]([https://pypi.org/project/mlenvdoctor/](https://pypi.org/project/mlenvdoctor/0.1.1/))
-
+[![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)]([https://pypi.org/project/mlenvdoctor/])
+  `
 > **Single command fixes 90% of "my torch.cuda.is_available() is False" issues.**
 
 ML Environment Doctor is a production-ready Python CLI that diagnoses, auto-fixes, and Dockerizes ML environments for LLM fine-tuning. It detects CUDA conflicts, generates locked requirements.txt/conda envs, tests GPU readiness with real LLM smoke tests, and outputs production Dockerfiles.
