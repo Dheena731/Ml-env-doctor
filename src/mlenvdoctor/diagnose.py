@@ -149,15 +149,15 @@ def check_pytorch_cuda() -> List[DiagnosticIssue]:
             # Check PyTorch/CUDA version compatibility
             torch_major, torch_minor = map(int, torch_version.split(".")[:2])
             if torch_major < 2 or (torch_major == 2 and torch_minor < 4):
-                        issues.append(
-                            DiagnosticIssue(
-                                name="PyTorch Version",
-                                status="WARN - Old version",
-                                severity="warning",
-                                fix="Upgrade: pip install torch>=2.4.0 --index-url https://download.pytorch.org/whl/cu124",
-                                details=f"Current: {torch_version}, Recommended: >=2.4.0",
-                            )
-                        )
+                issues.append(
+                    DiagnosticIssue(
+                        name="PyTorch Version",
+                        status="WARN - Old version",
+                        severity="warning",
+                        fix="Upgrade: pip install torch>=2.4.0 --index-url https://download.pytorch.org/whl/cu124",
+                        details=f"Current: {torch_version}, Recommended: >=2.4.0",
+                    )
+                )
         else:
             issues.append(
                 DiagnosticIssue(
@@ -224,15 +224,15 @@ def check_ml_libraries() -> List[DiagnosticIssue]:
                         )
                 except (ImportError, Exception):
                     # If packaging not available, just check if module exists
-                        issues.append(
-                            DiagnosticIssue(
-                                name=f"{lib_name}",
-                                status="PASS - Installed",
-                                severity="info",
-                                fix="",
-                                details=f"Version: {version}",
-                            )
+                    issues.append(
+                        DiagnosticIssue(
+                            name=f"{lib_name}",
+                            status="PASS - Installed",
+                            severity="info",
+                            fix="",
+                            details=f"Version: {version}",
                         )
+                    )
             else:
                 issues.append(
                     DiagnosticIssue(
