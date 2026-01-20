@@ -197,7 +197,11 @@ def create_virtualenv(env_name: str = ".venv") -> Optional[Path]:
 
         venv.create(env_path, with_pip=True)
         print_success(f"Virtual environment created: {env_name}")
-        print_info(f"Activate with: {'.venv\\Scripts\\activate' if sys.platform == 'win32' else 'source .venv/bin/activate'}")
+        if sys.platform == "win32":
+            activate_cmd = r".venv\Scripts\activate"
+        else:
+            activate_cmd = "source .venv/bin/activate"
+        print_info(f"Activate with: {activate_cmd}")
         return env_path
     except Exception as e:
         print_error(f"Failed to create virtual environment: {e}")
