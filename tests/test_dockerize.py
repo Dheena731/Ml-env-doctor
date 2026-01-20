@@ -50,4 +50,3 @@ def test_generate_service_template():
         content = result.read_text()
         assert "FastAPI" in content
         assert "def health" in content
-

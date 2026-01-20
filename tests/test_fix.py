@@ -49,4 +49,3 @@ def test_generate_requirements_invalid_stack():
         output_file = Path(tmpdir) / "requirements.txt"
         with pytest.raises(SystemExit):
             generate_requirements_txt(stack="invalid", output_file=str(output_file))
-

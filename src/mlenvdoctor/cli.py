@@ -21,14 +21,21 @@ app = typer.Typer(
 def version_callback(value: bool):
     """Print version and exit."""
     if value:
-        console.print(f"[bold blue]ML Environment Doctor[/bold blue] version [cyan]{__version__}[/cyan]")
+        console.print(
+            f"[bold blue]ML Environment Doctor[/bold blue] version [cyan]{__version__}[/cyan]"
+        )
         raise typer.Exit()
 
 
 @app.callback()
 def main(
     version: Optional[bool] = typer.Option(
-        None, "--version", "-v", callback=version_callback, is_eager=True, help="Show version and exit"
+        None,
+        "--version",
+        "-v",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit",
     ),
 ):
     """ML Environment Doctor - Diagnose & fix ML environments for LLM fine-tuning."""
@@ -37,7 +44,9 @@ def main(
 
 @app.command()
 def diagnose(
-    full: bool = typer.Option(False, "--full", "-f", help="Run full diagnostics including GPU benchmarks"),
+    full: bool = typer.Option(
+        False, "--full", "-f", help="Run full diagnostics including GPU benchmarks"
+    ),
 ):
     """
     🔍 Diagnose your ML environment.
@@ -85,8 +94,12 @@ def fix(
 @app.command()
 def dockerize(
     model: Optional[str] = typer.Argument(None, help="Model name (mistral-7b, tinyllama, gpt2)"),
-    service: bool = typer.Option(False, "--service", "-s", help="Generate FastAPI service template"),
-    output: str = typer.Option("Dockerfile.mlenvdoctor", "--output", "-o", help="Output Dockerfile name"),
+    service: bool = typer.Option(
+        False, "--service", "-s", help="Generate FastAPI service template"
+    ),
+    output: str = typer.Option(
+        "Dockerfile.mlenvdoctor", "--output", "-o", help="Output Dockerfile name"
+    ),
 ):
     """
     🐳 Generate Dockerfile for ML fine-tuning.
@@ -139,7 +152,9 @@ def smoke_test():
         console.print("[bold green]✅ Smoke test passed! Environment is ready.[/bold green]")
     else:
         console.print()
-        console.print("[bold red]❌ Smoke test failed. Run 'mlenvdoctor diagnose' for details.[/bold red]")
+        console.print(
+            "[bold red]❌ Smoke test failed. Run 'mlenvdoctor diagnose' for details.[/bold red]"
+        )
         raise typer.Exit(1)
 
 
@@ -150,4 +165,3 @@ def main_cli():
 
 if __name__ == "__main__":
     main_cli()
-

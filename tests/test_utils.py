@@ -38,4 +38,3 @@ def test_check_command_exists():
     """Test check_command_exists function."""
     # Python should exist
     assert check_command_exists("python") or check_command_exists("python3")
-

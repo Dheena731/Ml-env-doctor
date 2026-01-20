@@ -39,7 +39,9 @@ ML_STACKS = {
 }
 
 
-def generate_requirements_txt(stack: str = "trl-peft", output_file: str = "requirements-mlenvdoctor.txt") -> Path:
+def generate_requirements_txt(
+    stack: str = "trl-peft", output_file: str = "requirements-mlenvdoctor.txt"
+) -> Path:
     """Generate requirements.txt file."""
     if stack not in ML_STACKS:
         print_error(f"Unknown stack: {stack}. Available: {list(ML_STACKS.keys())}")
@@ -61,7 +63,9 @@ def generate_requirements_txt(stack: str = "trl-peft", output_file: str = "requi
             content = "# Standard PyTorch (CPU or CUDA)\n\n"
     except ImportError:
         content = "# PyTorch installation\n"
-        content += "# For CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
+        content += (
+            "# For CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
+        )
         content += "# For CPU: pip install torch\n\n"
 
     content += "\n".join(requirements)
@@ -72,7 +76,9 @@ def generate_requirements_txt(stack: str = "trl-peft", output_file: str = "requi
     return output_path
 
 
-def generate_conda_env(stack: str = "trl-peft", output_file: str = "environment-mlenvdoctor.yml") -> Path:
+def generate_conda_env(
+    stack: str = "trl-peft", output_file: str = "environment-mlenvdoctor.yml"
+) -> Path:
     """Generate conda environment file."""
     if stack not in ML_STACKS:
         print_error(f"Unknown stack: {stack}. Available: {list(ML_STACKS.keys())}")
@@ -250,4 +256,3 @@ def auto_fix(use_conda: bool = False, create_venv: bool = False, stack: str = "t
             print_info(f"Requirements file generated. Install manually with:")
             console.print(f"[cyan]  pip install -r {req_file}[/cyan]")
             return True
-

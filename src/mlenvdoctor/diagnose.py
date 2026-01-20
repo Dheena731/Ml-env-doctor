@@ -377,7 +377,18 @@ def check_docker_gpu() -> List[DiagnosticIssue]:
         return issues
 
     try:
-        result = run_command(["docker", "run", "--rm", "--gpus", "all", "nvidia/cuda:12.4.0-base-ubuntu22.04", "nvidia-smi"], timeout=30)
+        result = run_command(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--gpus",
+                "all",
+                "nvidia/cuda:12.4.0-base-ubuntu22.04",
+                "nvidia-smi",
+            ],
+            timeout=30,
+        )
         if result.returncode == 0:
             issues.append(
                 DiagnosticIssue(
@@ -460,7 +471,11 @@ def diagnose_env(full: bool = False) -> List[DiagnosticIssue]:
 
 def print_diagnostic_table(issues: List[DiagnosticIssue]) -> None:
     """Print diagnostic results as a Rich table."""
-    table = Table(title="ML Environment Doctor - Diagnostic Results", show_header=True, header_style="bold magenta")
+    table = Table(
+        title="ML Environment Doctor - Diagnostic Results",
+        show_header=True,
+        header_style="bold magenta",
+    )
     table.add_column("Issue", style="cyan", no_wrap=False)
     table.add_column("Status", style="bold")
     table.add_column("Severity", style="yellow")
@@ -474,7 +489,9 @@ def print_diagnostic_table(issues: List[DiagnosticIssue]) -> None:
 
     # Summary
     critical_count = sum(1 for i in issues if i.severity == "critical" and "FAIL" in i.status)
-    warning_count = sum(1 for i in issues if i.severity == "warning" and ("WARN" in i.status or "FAIL" in i.status))
+    warning_count = sum(
+        1 for i in issues if i.severity == "warning" and ("WARN" in i.status or "FAIL" in i.status)
+    )
     pass_count = sum(1 for i in issues if "PASS" in i.status)
 
     console.print()
@@ -485,9 +502,12 @@ def print_diagnostic_table(issues: List[DiagnosticIssue]) -> None:
         console.print(f"[red]❌ Critical Issues: {critical_count}[/red]")
 
     if critical_count == 0 and warning_count == 0:
-        console.print("\n[bold green]🎉 Your ML environment looks ready for fine-tuning![/bold green]")
+        console.print(
+            "\n[bold green]🎉 Your ML environment looks ready for fine-tuning![/bold green]"
+        )
     elif critical_count > 0:
         console.print("\n[bold red]⚠️  Please fix critical issues before proceeding.[/bold red]")
     else:
-        console.print("\n[bold yellow]💡 Consider addressing warnings for optimal performance.[/bold yellow]")
-
+        console.print(
+            "\n[bold yellow]💡 Consider addressing warnings for optimal performance.[/bold yellow]"
+        )

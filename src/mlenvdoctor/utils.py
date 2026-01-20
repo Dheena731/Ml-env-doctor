@@ -103,5 +103,3 @@ def format_size(size_bytes: int) -> str:
 def get_python_version() -> Tuple[int, int, int]:
     """Get Python version as tuple."""
     return sys.version_info[:3]
-
-

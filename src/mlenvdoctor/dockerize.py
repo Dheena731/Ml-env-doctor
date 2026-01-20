@@ -201,4 +201,3 @@ if __name__ == "__main__":
     output_path.write_text(service_content, encoding="utf-8")
     print_success(f"Generated service template: {output_file}")
     return output_path
-

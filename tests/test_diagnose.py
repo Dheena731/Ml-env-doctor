@@ -42,4 +42,3 @@ def test_diagnose_env_full():
     assert all(isinstance(issue, DiagnosticIssue) for issue in issues)
     # Full scan should return more issues
     assert len(issues) >= 3  # At least basic checks
-

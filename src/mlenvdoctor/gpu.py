@@ -78,7 +78,8 @@ def smoke_test_lora() -> bool:
                 if tokenizer.pad_token is None:
                     tokenizer.pad_token = tokenizer.eos_token
                 model = AutoModelForCausalLM.from_pretrained(
-                    model_name, torch_dtype=torch.float16 if device.type == "cuda" else torch.float32
+                    model_name,
+                    torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
                 ).to(device)
 
             # Configure LoRA
@@ -146,7 +147,9 @@ def test_model(model_name: str = "tinyllama") -> bool:
         # Estimate memory requirements (rough)
         if "7b" in actual_model_name.lower() or "7B" in actual_model_name:
             if free_gb < 16:
-                print_error(f"Insufficient GPU memory: {free_gb:.1f}GB free, need ~16GB for 7B model")
+                print_error(
+                    f"Insufficient GPU memory: {free_gb:.1f}GB free, need ~16GB for 7B model"
+                )
                 return False
 
         with console.status(f"[bold green]Loading {actual_model_name}..."):
@@ -181,4 +184,3 @@ def test_model(model_name: str = "tinyllama") -> bool:
     except Exception as e:
         print_error(f"Model test error: {e}")
         return False
-
