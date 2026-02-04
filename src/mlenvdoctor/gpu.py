@@ -8,11 +8,17 @@ try:
 except ImportError:
     torch = None  # type: ignore
 
+import sys
+
 from rich.console import Console
 
 from .utils import print_error, print_info, print_success
 
-console = Console()
+# Configure console for Windows compatibility
+if sys.platform == "win32":
+    console = Console(legacy_windows=True, force_terminal=True)
+else:
+    console = Console()
 
 
 def benchmark_gpu_ops() -> Dict[str, float]:

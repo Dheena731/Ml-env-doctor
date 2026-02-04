@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Environment Doctor - Diagnostic Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .summary-card .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .passed { color: #10b981; }
+        .warning { color: #f59e0b; }
+        .critical { color: #ef4444; }
+        table {
+            width: 100%;
+            background: white;
+            border-collapse: collapse;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        th {
+            background-color: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:hover {
+            background-color: #f9fafb;
+        }
+        .status-pass { color: #10b981; font-weight: 600; }
+        .status-fail { color: #ef4444; font-weight: 600; }
+        .status-warn { color: #f59e0b; font-weight: 600; }
+        .severity-critical { background-color: #fee2e2; }
+        .severity-warning { background-color: #fef3c7; }
+        .severity-info { background-color: #dbeafe; }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 ML Environment Doctor</h1>
+        <p>Diagnostic Report - Generated on 2026-01-31 23:40:29</p>
+        <p style="font-size: 14px; opacity: 0.9;">Version 0.1.1</p>
+    </div>
+
+    <div class="summary">
+        <div class="summary-card">
+            <h3>Total Checks</h3>
+            <div class="value">7</div>
+        </div>
+        <div class="summary-card">
+            <h3>Passed</h3>
+            <div class="value passed">7</div>
+        </div>
+        <div class="summary-card">
+            <h3>Warnings</h3>
+            <div class="value warning">0</div>
+        </div>
+        <div class="summary-card">
+            <h3>Critical Issues</h3>
+            <div class="value critical">0</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Issue</th>
+                <th>Status</th>
+                <th>Severity</th>
+                <th>Fix</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr class="severity-info">
+                <td><strong>PyTorch CUDA</strong></td>
+                <td class="status-pass">PASS - CUDA 12.1 (1 GPU(s))</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>PyTorch 2.4.0+cu121, Device: NVIDIA GeForce RTX 3050 Laptop GPU</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>NVIDIA GPU Driver</strong></td>
+                <td class="status-pass">PASS - CUDA 13.0</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>CUDA Version: 13.0</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>transformers</strong></td>
+                <td class="status-pass">PASS - 4.57.6</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>peft</strong></td>
+                <td class="status-pass">PASS - 0.18.1</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>trl</strong></td>
+                <td class="status-pass">PASS - 0.27.0</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>datasets</strong></td>
+                <td class="status-pass">PASS - 4.5.0</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>accelerate</strong></td>
+                <td class="status-pass">PASS - 1.12.0</td>
+                <td>INFO</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p>Generated by ML Environment Doctor | <a href="https://github.com/dheena731/ml_env_doctor">GitHub</a></p>
+    </div>
+</body>
+</html>

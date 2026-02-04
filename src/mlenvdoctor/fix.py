@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .diagnose import diagnose_env
+from .icons import icon_wrench
 from .utils import (
     check_command_exists,
     console,
@@ -212,7 +213,7 @@ def create_virtualenv(env_name: str = ".venv") -> Optional[Path]:
 
 def auto_fix(use_conda: bool = False, create_venv: bool = False, stack: str = "trl-peft") -> bool:
     """Auto-fix environment issues based on diagnostics."""
-    console.print("[bold blue]🔧 Running Auto-Fix...[/bold blue]\n")
+    console.print(f"[bold blue]{icon_wrench()} Running Auto-Fix...[/bold blue]\n")
 
     # Run diagnostics
     issues = diagnose_env(full=False)

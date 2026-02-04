@@ -1,0 +1,64 @@
+{
+  "issues": [
+    {
+      "name": "PyTorch CUDA",
+      "status": "PASS - CUDA 12.1 (1 GPU(s))",
+      "severity": "info",
+      "fix": "",
+      "details": "PyTorch 2.4.0+cu121, Device: NVIDIA GeForce RTX 3050 Laptop GPU"
+    },
+    {
+      "name": "NVIDIA GPU Driver",
+      "status": "PASS - CUDA 13.0",
+      "severity": "info",
+      "fix": "",
+      "details": "CUDA Version: 13.0"
+    },
+    {
+      "name": "transformers",
+      "status": "PASS - 4.57.6",
+      "severity": "info",
+      "fix": "",
+      "details": null
+    },
+    {
+      "name": "peft",
+      "status": "PASS - 0.18.1",
+      "severity": "info",
+      "fix": "",
+      "details": null
+    },
+    {
+      "name": "trl",
+      "status": "PASS - 0.27.0",
+      "severity": "info",
+      "fix": "",
+      "details": null
+    },
+    {
+      "name": "datasets",
+      "status": "PASS - 4.5.0",
+      "severity": "info",
+      "fix": "",
+      "details": null
+    },
+    {
+      "name": "accelerate",
+      "status": "PASS - 1.12.0",
+      "severity": "info",
+      "fix": "",
+      "details": null
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "warnings": 0,
+    "critical": 0
+  },
+  "metadata": {
+    "version": "0.1.1",
+    "timestamp": "2026-01-31T23:39:36.529394",
+    "tool": "mlenvdoctor"
+  }
+}

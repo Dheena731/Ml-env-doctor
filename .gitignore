@@ -139,3 +139,9 @@ environment-mlenvdoctor.yml
 Dockerfile.mlenvdoctor
 *.mlenvdoctor
 
+# Local docs / helper guides (not for distribution)
+QUICK_CLI_TEST.md
+CLI_TESTING_GUIDE.md
+TECHNICAL_IMPROVEMENTS.md
+TECHNICAL_IMPROVEMENTS_SUMMARY.md
+CHANGES_SUMMARY.md

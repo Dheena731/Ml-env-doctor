@@ -11,6 +11,7 @@ except ImportError:
 
 from rich.table import Table
 
+from .icons import icon_check, icon_cross, icon_info, icon_search, icon_warning
 from .utils import check_command_exists, console, format_size, get_home_config_dir, run_command
 
 
@@ -33,12 +34,13 @@ class DiagnosticIssue:
 
     def to_row(self) -> Tuple[str, str, str, str]:
         """Convert to table row."""
-        status_icon = {
-            "PASS": "✅",
-            "FAIL": "❌",
-            "WARN": "⚠️",
-            "INFO": "ℹ️",
-        }.get(self.status.split()[0], "❓")
+        status_icon_map = {
+            "PASS": icon_check(),
+            "FAIL": icon_cross(),
+            "WARN": icon_warning(),
+            "INFO": icon_info(),
+        }
+        status_icon = status_icon_map.get(self.status.split()[0], "?")
         return (
             self.name,
             f"{status_icon} {self.status}",
@@ -411,11 +413,19 @@ def check_docker_gpu() -> List[DiagnosticIssue]:
 
 def check_internet_connectivity() -> List[DiagnosticIssue]:
     """Check internet connectivity for HF Hub."""
+    from .retry import retry_network
+
     issues = []
-    try:
+
+    @retry_network
+    def _check_connectivity() -> bool:
         import urllib.request
 
         urllib.request.urlopen("https://huggingface.co", timeout=5)
+        return True
+
+    try:
+        _check_connectivity()
         issues.append(
             DiagnosticIssue(
                 name="Internet Connectivity",
@@ -424,36 +434,117 @@ def check_internet_connectivity() -> List[DiagnosticIssue]:
                 fix="",
             )
         )
-    except Exception:
+    except Exception as e:
         issues.append(
             DiagnosticIssue(
                 name="Internet Connectivity",
                 status="WARN - Cannot reach HF Hub",
                 severity="warning",
                 fix="Check internet connection and firewall settings",
+                details=str(e),
             )
         )
 
     return issues
 
 
-def diagnose_env(full: bool = False) -> List[DiagnosticIssue]:
-    """Run all diagnostic checks."""
+def diagnose_env(full: bool = False, parallel: bool = True) -> List[DiagnosticIssue]:
+    """
+    Run all diagnostic checks.
+
+    Args:
+        full: Whether to run full diagnostics including extended checks
+        parallel: Whether to run independent checks in parallel
+
+    Returns:
+        List of diagnostic issues found
+    """
+    from .parallel import run_parallel_with_results
+
     all_issues: List[DiagnosticIssue] = []
 
-    console.print("[bold blue]🔍 Running ML Environment Diagnostics...[/bold blue]\n")
+    console.print(f"[bold blue]{icon_search()} Running ML Environment Diagnostics...[/bold blue]\n")
 
-    # Core checks (always run)
-    all_issues.extend(check_cuda_driver())
-    all_issues.extend(check_pytorch_cuda())
-    all_issues.extend(check_ml_libraries())
+    # Core checks (always run) - these can run in parallel
+    core_checks = [
+        check_cuda_driver,
+        check_pytorch_cuda,
+        check_ml_libraries,
+    ]
 
-    # Extended checks (if --full)
+    if parallel:
+        # Run core checks in parallel
+        results = run_parallel_with_results(
+            lambda check_func: check_func(),
+            core_checks,
+            max_workers=3,
+            timeout=60.0,
+        )
+        for check_func, result in results:
+            if isinstance(result, Exception):
+                # Log error but continue with other checks
+                from .logger import logger
+                logger.error(f"Check {check_func.__name__} failed: {result}")
+                # Add a diagnostic issue for the failure
+                all_issues.append(
+                    DiagnosticIssue(
+                        name=check_func.__name__.replace("check_", "").replace("_", " ").title(),
+                        status="FAIL - Check error",
+                        severity="critical",
+                        fix="Run diagnostics again or check logs",
+                        details=str(result),
+                    )
+                )
+            else:
+                all_issues.extend(result)
+    else:
+        # Sequential execution (fallback)
+        for check_func in core_checks:
+            try:
+                all_issues.extend(check_func())
+            except Exception as e:
+                from .logger import logger
+                logger.error(f"Check {check_func.__name__} failed: {e}")
+                all_issues.append(
+                    DiagnosticIssue(
+                        name=check_func.__name__.replace("check_", "").replace("_", " ").title(),
+                        status="FAIL - Check error",
+                        severity="critical",
+                        fix="Run diagnostics again or check logs",
+                        details=str(e),
+                    )
+                )
+
+    # Extended checks (if --full) - can also run in parallel
     if full:
-        all_issues.extend(check_gpu_memory())
-        all_issues.extend(check_disk_space())
-        all_issues.extend(check_docker_gpu())
-        all_issues.extend(check_internet_connectivity())
+        extended_checks = [
+            check_gpu_memory,
+            check_disk_space,
+            check_docker_gpu,
+            check_internet_connectivity,
+        ]
+
+        if parallel:
+            results = run_parallel_with_results(
+                lambda check_func: check_func(),
+                extended_checks,
+                max_workers=4,
+                timeout=120.0,
+            )
+            for check_func, result in results:
+                if isinstance(result, Exception):
+                    from .logger import logger
+                    logger.warning(f"Extended check {check_func.__name__} failed: {result}")
+                    # Extended checks are less critical, so we log but don't fail
+                else:
+                    all_issues.extend(result)
+        else:
+            for check_func in extended_checks:
+                try:
+                    all_issues.extend(check_func())
+                except Exception as e:
+                    from .logger import logger
+                    logger.warning(f"Extended check {check_func.__name__} failed: {e}")
 
     return all_issues
 
@@ -484,18 +575,18 @@ def print_diagnostic_table(issues: List[DiagnosticIssue]) -> None:
     pass_count = sum(1 for i in issues if "PASS" in i.status)
 
     console.print()
-    console.print(f"[green]✅ Passed: {pass_count}[/green]")
+    console.print(f"[green]{icon_check()} Passed: {pass_count}[/green]")
     if warning_count > 0:
-        console.print(f"[yellow]⚠️  Warnings: {warning_count}[/yellow]")
+        console.print(f"[yellow]{icon_warning()}  Warnings: {warning_count}[/yellow]")
     if critical_count > 0:
-        console.print(f"[red]❌ Critical Issues: {critical_count}[/red]")
+        console.print(f"[red]{icon_cross()} Critical Issues: {critical_count}[/red]")
 
     if critical_count == 0 and warning_count == 0:
         console.print(
             "\n[bold green]🎉 Your ML environment looks ready for fine-tuning![/bold green]"
         )
     elif critical_count > 0:
-        console.print("\n[bold red]⚠️  Please fix critical issues before proceeding.[/bold red]")
+        console.print(f"\n[bold red]{icon_warning()}  Please fix critical issues before proceeding.[/bold red]")
     else:
         console.print(
             "\n[bold yellow]💡 Consider addressing warnings for optimal performance.[/bold yellow]"
