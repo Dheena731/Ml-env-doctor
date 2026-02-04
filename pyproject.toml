@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mlenvdoctor"
-version = "0.1.1"
+version = "0.1.2"
 description = "Diagnose & fix ML environments for LLM fine-tuning"
 readme = "README.md"
 requires-python = ">=3.8"
