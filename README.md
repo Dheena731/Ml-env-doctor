@@ -131,7 +131,7 @@ mlenvdoctor smoke-test
 ## 📦 Installation
 
 ```bash
-# From PyPI (when published)
+# From PyPI 
 pip install mlenvdoctor
 
 # From source
