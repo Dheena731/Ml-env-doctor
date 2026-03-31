@@ -3,6 +3,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)]([https://pypi.org/project/mlenvdoctor/])
+<iframe src="https://clickhouse-analytics.metabaseapp.com/public/dashboard/8d516106-3a9f-4674-aafc-aa39d6380ee2?project_name=boostapi#&theme=night" frameborder="0" width="100%" height="600"></iframe>
 
 > **Single command fixes 90% of "my torch.cuda.is_available() is False" issues.**
 
