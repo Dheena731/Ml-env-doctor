@@ -2,7 +2,7 @@
 
 import importlib
 import re
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     import torch
@@ -49,6 +49,22 @@ class DiagnosticIssue:
         )
 
 
+def get_fix_commands(issues: List["DiagnosticIssue"]) -> List[Dict[str, str]]:
+    """Return copy-paste fix commands for actionable issues."""
+    fixes: List[Dict[str, str]] = []
+    for issue in issues:
+        if issue.fix and issue.severity != "info" and issue.status.startswith(("FAIL", "WARN")):
+            fixes.append(
+                {
+                    "issue": issue.name,
+                    "severity": issue.severity,
+                    "status": issue.status,
+                    "command": issue.fix,
+                }
+            )
+    return fixes
+
+
 def check_cuda_driver() -> List[DiagnosticIssue]:
     """Check NVIDIA CUDA driver availability."""
     issues = []
@@ -58,7 +74,7 @@ def check_cuda_driver() -> List[DiagnosticIssue]:
                 name="NVIDIA GPU Driver",
                 status="FAIL - nvidia-smi not found",
                 severity="critical",
-                fix="Install NVIDIA drivers: https://www.nvidia.com/Download/index.aspx",
+                fix="Install NVIDIA drivers, then verify with: nvidia-smi",
             )
         )
         return issues
@@ -71,7 +87,7 @@ def check_cuda_driver() -> List[DiagnosticIssue]:
                     name="NVIDIA GPU Driver",
                     status="FAIL - nvidia-smi error",
                     severity="critical",
-                    fix="Install/reinstall NVIDIA drivers and reboot",
+                    fix="Reinstall NVIDIA drivers, reboot, then run: nvidia-smi",
                 )
             )
             return issues
@@ -98,7 +114,7 @@ def check_cuda_driver() -> List[DiagnosticIssue]:
                     name="NVIDIA GPU Driver",
                     status="FAIL - No GPU detected",
                     severity="critical",
-                    fix="Check GPU installation and drivers",
+                    fix="Verify hardware visibility with: nvidia-smi",
                 )
             )
     except Exception as e:
@@ -107,7 +123,7 @@ def check_cuda_driver() -> List[DiagnosticIssue]:
                 name="NVIDIA GPU Driver",
                 status=f"FAIL - {str(e)}",
                 severity="critical",
-                fix="Install NVIDIA drivers and reboot",
+                fix="Reinstall NVIDIA drivers, reboot, then run: nvidia-smi",
             )
         )
 
@@ -176,7 +192,7 @@ def check_pytorch_cuda() -> List[DiagnosticIssue]:
                 name="PyTorch CUDA",
                 status=f"FAIL - {str(e)}",
                 severity="critical",
-                fix="Reinstall PyTorch with CUDA support",
+                fix="pip install --upgrade --force-reinstall torch --index-url https://download.pytorch.org/whl/cu124",
             )
         )
 
@@ -257,6 +273,172 @@ def check_ml_libraries() -> List[DiagnosticIssue]:
     return issues
 
 
+def check_tensorflow_keras() -> List[DiagnosticIssue]:
+    """Check TensorFlow and Keras 3 readiness."""
+    issues = []
+
+    try:
+        tensorflow = importlib.import_module("tensorflow")
+        tf_version = getattr(tensorflow, "__version__", "unknown")
+        try:
+            gpu_devices = tensorflow.config.list_physical_devices("GPU")
+            gpu_count = len(gpu_devices)
+        except Exception:
+            gpu_count = 0
+
+        tf_status = f"PASS - {tf_version}"
+        tf_details = f"Detected {gpu_count} GPU device(s)" if gpu_count else "CPU-only TensorFlow runtime"
+        tf_severity = "info"
+        tf_fix = ""
+
+        if check_command_exists("nvidia-smi") and gpu_count == 0:
+            tf_status = f"WARN - {tf_version} (GPU not visible)"
+            tf_severity = "warning"
+            tf_fix = "pip install --upgrade tensorflow[and-cuda]"
+
+        issues.append(
+            DiagnosticIssue(
+                name="TensorFlow",
+                status=tf_status,
+                severity=tf_severity,
+                fix=tf_fix,
+                details=tf_details,
+            )
+        )
+    except ImportError:
+        issues.append(
+            DiagnosticIssue(
+                name="TensorFlow",
+                status="INFO - Not installed",
+                severity="info",
+                fix="pip install tensorflow[and-cuda]",
+                details="Optional unless you use TensorFlow/Keras workloads",
+            )
+        )
+        tensorflow = None
+        tf_version = None
+
+    try:
+        keras = importlib.import_module("keras")
+        keras_version = getattr(keras, "__version__", "unknown")
+        try:
+            from packaging import version as pkg_version
+
+            if keras_version != "unknown" and pkg_version.parse(keras_version) < pkg_version.parse("3.0.0"):
+                issues.append(
+                    DiagnosticIssue(
+                        name="Keras",
+                        status=f"WARN - Old version ({keras_version})",
+                        severity="warning",
+                        fix="pip install --upgrade keras>=3.0.0",
+                        details="Keras 3 is recommended for modern TensorFlow workflows",
+                    )
+                )
+            else:
+                issues.append(
+                    DiagnosticIssue(
+                        name="Keras",
+                        status=f"PASS - {keras_version}",
+                        severity="info",
+                        fix="",
+                        details="Keras 3 ready" if keras_version != "unknown" else "Installed",
+                    )
+                )
+        except Exception:
+            issues.append(
+                DiagnosticIssue(
+                    name="Keras",
+                    status=f"PASS - {keras_version}",
+                    severity="info",
+                    fix="",
+                )
+            )
+    except ImportError:
+        severity = "warning" if tensorflow is not None else "info"
+        status = "WARN - Not installed" if tensorflow is not None else "INFO - Not installed"
+        details = (
+            f"TensorFlow {tf_version} is installed without standalone Keras 3"
+            if tensorflow is not None
+            else "Optional unless you use Keras directly"
+        )
+        issues.append(
+            DiagnosticIssue(
+                name="Keras",
+                status=status,
+                severity=severity,
+                fix="pip install keras>=3.0.0",
+                details=details,
+            )
+        )
+
+    return issues
+
+
+def check_jax_flax() -> List[DiagnosticIssue]:
+    """Check JAX/Flax installation and accelerator visibility."""
+    issues = []
+
+    try:
+        jax = importlib.import_module("jax")
+        jax_version = getattr(jax, "__version__", "unknown")
+        devices = list(jax.devices())
+        backend = jax.default_backend()
+        device_kinds = sorted({getattr(device, "platform", "unknown") for device in devices})
+        details = f"Backend: {backend}, devices: {len(devices)} ({', '.join(device_kinds) if device_kinds else 'none'})"
+
+        severity = "info"
+        status = f"PASS - {jax_version}"
+        fix = ""
+        if check_command_exists("nvidia-smi") and backend == "cpu":
+            severity = "warning"
+            status = f"WARN - {jax_version} (CPU backend)"
+            fix = "pip install --upgrade \"jax[cuda]\""
+
+        issues.append(
+            DiagnosticIssue(
+                name="JAX",
+                status=status,
+                severity=severity,
+                fix=fix,
+                details=details,
+            )
+        )
+    except ImportError:
+        issues.append(
+            DiagnosticIssue(
+                name="JAX",
+                status="INFO - Not installed",
+                severity="info",
+                fix="pip install jax flax",
+                details="Optional unless you use JAX/Flax workloads",
+            )
+        )
+
+    try:
+        flax = importlib.import_module("flax")
+        flax_version = getattr(flax, "__version__", "unknown")
+        issues.append(
+            DiagnosticIssue(
+                name="Flax",
+                status=f"PASS - {flax_version}",
+                severity="info",
+                fix="",
+            )
+        )
+    except ImportError:
+        issues.append(
+            DiagnosticIssue(
+                name="Flax",
+                status="INFO - Not installed",
+                severity="info",
+                fix="pip install flax",
+                details="Install if you train JAX/Flax models",
+            )
+        )
+
+    return issues
+
+
 def check_gpu_memory() -> List[DiagnosticIssue]:
     """Check GPU memory availability."""
     issues = []
@@ -294,7 +476,7 @@ def check_gpu_memory() -> List[DiagnosticIssue]:
                 name="GPU Memory",
                 status=f"FAIL - {str(e)}",
                 severity="warning",
-                fix="Check GPU access",
+                fix="Check GPU usage with: nvidia-smi",
             )
         )
 
@@ -307,37 +489,27 @@ def check_disk_space() -> List[DiagnosticIssue]:
     try:
         import shutil
 
-        cache_dir = get_home_config_dir().parent / ".cache" / "huggingface"
-        if cache_dir.exists():
-            stat = shutil.disk_usage(cache_dir.parent)
-            free_gb = stat.free / (1024**3)
-            if free_gb < 50:
-                issues.append(
-                    DiagnosticIssue(
-                        name="Disk Space",
-                        status=f"WARN - Low space ({free_gb:.1f}GB free)",
-                        severity="warning",
-                        fix="Free up disk space (HF cache needs ~50GB)",
-                        details=f"Free: {format_size(stat.free)}",
-                    )
+        cache_root = get_home_config_dir().parent / ".cache"
+        stat = shutil.disk_usage(cache_root)
+        free_gb = stat.free / (1024**3)
+        if free_gb < 50:
+            issues.append(
+                DiagnosticIssue(
+                    name="Disk Space",
+                    status=f"WARN - Low space ({free_gb:.1f}GB free)",
+                    severity="warning",
+                    fix="Free up disk space (HF cache needs ~50GB)",
+                    details=f"Checked: {cache_root} | Free: {format_size(stat.free)}",
                 )
-            else:
-                issues.append(
-                    DiagnosticIssue(
-                        name="Disk Space",
-                        status=f"PASS - {free_gb:.1f}GB free",
-                        severity="info",
-                        fix="",
-                        details=f"Free: {format_size(stat.free)}",
-                    )
-                )
+            )
         else:
             issues.append(
                 DiagnosticIssue(
                     name="Disk Space",
-                    status="INFO - Cache dir not found",
+                    status=f"PASS - {free_gb:.1f}GB free",
                     severity="info",
                     fix="",
+                    details=f"Checked: {cache_root} | Free: {format_size(stat.free)}",
                 )
             )
     except Exception as e:
@@ -346,7 +518,7 @@ def check_disk_space() -> List[DiagnosticIssue]:
                 name="Disk Space",
                 status=f"WARN - {str(e)}",
                 severity="warning",
-                fix="Check disk space manually",
+                fix="Check disk space manually for your cache drive",
             )
         )
 
@@ -362,7 +534,7 @@ def check_docker_gpu() -> List[DiagnosticIssue]:
                 name="Docker GPU Support",
                 status="INFO - Docker not installed",
                 severity="info",
-                fix="Install Docker for GPU containerization",
+                fix="Install Docker, then test with: docker run --rm hello-world",
             )
         )
         return issues
@@ -395,7 +567,7 @@ def check_docker_gpu() -> List[DiagnosticIssue]:
                     name="Docker GPU Support",
                     status="FAIL - GPU not accessible in Docker",
                     severity="warning",
-                    fix="Install nvidia-container-toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html",
+                    fix="Install nvidia-container-toolkit, then test: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi",
                 )
             )
     except Exception:
@@ -440,7 +612,7 @@ def check_internet_connectivity() -> List[DiagnosticIssue]:
                 name="Internet Connectivity",
                 status="WARN - Cannot reach HF Hub",
                 severity="warning",
-                fix="Check internet connection and firewall settings",
+                fix="Check connectivity with: python -c \"import urllib.request; urllib.request.urlopen('https://huggingface.co', timeout=5)\"",
                 details=str(e),
             )
         )
@@ -448,7 +620,11 @@ def check_internet_connectivity() -> List[DiagnosticIssue]:
     return issues
 
 
-def diagnose_env(full: bool = False, parallel: bool = True) -> List[DiagnosticIssue]:
+def diagnose_env(
+    full: bool = False,
+    parallel: bool = True,
+    show_header: bool = True,
+) -> List[DiagnosticIssue]:
     """
     Run all diagnostic checks.
 
@@ -463,13 +639,16 @@ def diagnose_env(full: bool = False, parallel: bool = True) -> List[DiagnosticIs
 
     all_issues: List[DiagnosticIssue] = []
 
-    console.print(f"[bold blue]{icon_search()} Running ML Environment Diagnostics...[/bold blue]\n")
+    if show_header:
+        console.print(f"[bold blue]{icon_search()} Running ML Environment Diagnostics...[/bold blue]\n")
 
     # Core checks (always run) - these can run in parallel
     core_checks = [
         check_cuda_driver,
         check_pytorch_cuda,
         check_ml_libraries,
+        check_tensorflow_keras,
+        check_jax_flax,
     ]
 
     if parallel:
@@ -477,7 +656,7 @@ def diagnose_env(full: bool = False, parallel: bool = True) -> List[DiagnosticIs
         results = run_parallel_with_results(
             lambda check_func: check_func(),
             core_checks,
-            max_workers=3,
+            max_workers=5,
             timeout=60.0,
         )
         for check_func, result in results:
@@ -491,7 +670,7 @@ def diagnose_env(full: bool = False, parallel: bool = True) -> List[DiagnosticIs
                         name=check_func.__name__.replace("check_", "").replace("_", " ").title(),
                         status="FAIL - Check error",
                         severity="critical",
-                        fix="Run diagnostics again or check logs",
+                        fix="Run diagnostics again with: mlenvdoctor diagnose --log-level DEBUG",
                         details=str(result),
                     )
                 )
@@ -510,7 +689,7 @@ def diagnose_env(full: bool = False, parallel: bool = True) -> List[DiagnosticIs
                         name=check_func.__name__.replace("check_", "").replace("_", " ").title(),
                         status="FAIL - Check error",
                         severity="critical",
-                        fix="Run diagnostics again or check logs",
+                        fix="Run diagnostics again with: mlenvdoctor diagnose --log-level DEBUG",
                         details=str(e),
                     )
                 )
@@ -583,11 +762,11 @@ def print_diagnostic_table(issues: List[DiagnosticIssue]) -> None:
 
     if critical_count == 0 and warning_count == 0:
         console.print(
-            "\n[bold green]🎉 Your ML environment looks ready for fine-tuning![/bold green]"
+            "\n[bold green]Your ML environment looks ready for fine-tuning![/bold green]"
         )
     elif critical_count > 0:
         console.print(f"\n[bold red]{icon_warning()}  Please fix critical issues before proceeding.[/bold red]")
     else:
         console.print(
-            "\n[bold yellow]💡 Consider addressing warnings for optimal performance.[/bold yellow]"
+            "\n[bold yellow]Consider addressing warnings for optimal performance.[/bold yellow]"
         )

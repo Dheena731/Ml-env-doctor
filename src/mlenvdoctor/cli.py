@@ -1,25 +1,67 @@
 """CLI entrypoint for ML Environment Doctor."""
 
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import click
 import typer
+from typer.core import TyperArgument
 
 from . import __version__
-from .diagnose import diagnose_env, print_diagnostic_table
+from .diagnose import diagnose_env, get_fix_commands, print_diagnostic_table
 from .dockerize import generate_dockerfile, generate_service_template
-from .export import export_csv, export_html, export_json
-from .fix import auto_fix
+from .export import build_export_data, export_csv, export_html, export_json, get_exit_code
+from .fix import auto_fix, get_stack_requirements
+from .mcp import serve_mcp
 from .gpu import benchmark_gpu_ops, smoke_test_lora, test_model as gpu_test_model
-from .icons import icon_check, icon_cross, icon_search, icon_test, icon_whale, icon_wrench
+from .icons import (
+    icon_check,
+    icon_cross,
+    icon_search,
+    icon_test,
+    icon_warning,
+    icon_whale,
+    icon_wrench,
+)
 from .logger import get_default_log_file, setup_logger
 from .utils import console
+from .validators import validate_log_level
+
+
+def _patch_typer_click_metavar_compat() -> None:
+    """Patch Typer/Click metavar incompatibilities in older Typer releases."""
+    if getattr(click.core.Parameter.make_metavar, "__mlenvdoctor_compat__", False):
+        return
+
+    original_parameter_make_metavar = click.core.Parameter.make_metavar
+
+    def parameter_make_metavar(self, ctx=None):  # type: ignore[no-untyped-def]
+        if ctx is None:
+            ctx = click.Context(click.Command(self.name or "mlenvdoctor"))
+        return original_parameter_make_metavar(self, ctx)
+
+    parameter_make_metavar.__mlenvdoctor_compat__ = True  # type: ignore[attr-defined]
+    click.core.Parameter.make_metavar = parameter_make_metavar
+
+    def typer_argument_make_metavar(self, ctx=None):  # type: ignore[no-untyped-def]
+        if ctx is None:
+            ctx = click.Context(click.Command(self.name or "mlenvdoctor"))
+        return click.core.Argument.make_metavar(self, ctx)
+
+    TyperArgument.make_metavar = typer_argument_make_metavar
+
+
+_patch_typer_click_metavar_compat()
 
 app = typer.Typer(
     name="mlenvdoctor",
     help=f"{icon_search()} ML Environment Doctor - Diagnose & fix ML environments for LLM fine-tuning",
     add_completion=False,
 )
+mcp_app = typer.Typer(help="Minimal MCP server support.")
+stack_app = typer.Typer(help="Recommended dependency stacks.")
 
 
 def version_callback(value: bool):
@@ -53,9 +95,17 @@ def main(
     ),
 ):
     """ML Environment Doctor - Diagnose & fix ML environments for LLM fine-tuning."""
-    # Set up logging
-    log_path = log_file or get_default_log_file()
-    setup_logger(log_file=log_path, level=log_level)
+    try:
+        validated_level = validate_log_level(log_level)
+    except Exception as exc:
+        raise typer.BadParameter(str(exc), param_hint="--log-level") from exc
+
+    try:
+        log_path = log_file or get_default_log_file()
+        setup_logger(log_file=log_path, level=validated_level)
+    except OSError as exc:
+        setup_logger(log_file=None, level=validated_level)
+        typer.echo(f"{icon_warning()} Logging to file disabled: {exc}", err=True)
 
 
 @app.command()
@@ -63,8 +113,10 @@ def diagnose(
     full: bool = typer.Option(
         False, "--full", "-f", help="Run full diagnostics including GPU benchmarks"
     ),
-    json_output: Optional[Path] = typer.Option(
-        None, "--json", help="Export results to JSON file"
+    json_output: Optional[str] = typer.Option(
+        None,
+        "--json",
+        help="Export results to JSON file, or use '-' to print machine-readable JSON to stdout",
     ),
     csv_output: Optional[Path] = typer.Option(
         None, "--csv", help="Export results to CSV file"
@@ -79,13 +131,19 @@ def diagnose(
     Quick scan: Checks CUDA, PyTorch, and required ML libraries.
     Full scan (--full): Also checks GPU memory, disk space, Docker GPU support, and connectivity.
     """
-    issues = diagnose_env(full=full)
-    print_diagnostic_table(issues)
+    json_to_stdout = json_output == "-"
+    issues = diagnose_env(full=full, show_header=not json_to_stdout)
+    if not json_to_stdout:
+        print_diagnostic_table(issues)
+    exit_code = get_exit_code(issues)
 
     # Export to formats if requested
     if json_output:
-        export_json(issues, json_output)
-        console.print(f"[green]{icon_check()} Exported to {json_output}[/green]")
+        if json_to_stdout:
+            typer.echo(json.dumps(build_export_data(issues, include_metadata=True), ensure_ascii=False))
+        else:
+            export_json(issues, Path(json_output))
+            console.print(f"[green]{icon_check()} Exported to {json_output}[/green]")
     if csv_output:
         export_csv(issues, csv_output)
         console.print(f"[green]{icon_check()} Exported to {csv_output}[/green]")
@@ -93,7 +151,7 @@ def diagnose(
         export_html(issues, html_output)
         console.print(f"[green]{icon_check()} Exported to {html_output}[/green]")
 
-    if full:
+    if full and not json_to_stdout:
         console.print()
         console.print("[bold blue]Running GPU benchmark...[/bold blue]")
         try:
@@ -106,6 +164,77 @@ def diagnose(
                 console.print("[yellow]GPU benchmark skipped (no GPU available)[/yellow]")
         except Exception as e:
             console.print(f"[yellow]GPU benchmark error: {e}[/yellow]")
+
+    raise typer.Exit(exit_code)
+
+
+@app.command()
+def doctor(
+    ci: bool = typer.Option(False, "--ci", help="Emit CI-friendly output"),
+    full: bool = typer.Option(
+        False, "--full", "-f", help="Run full diagnostics including GPU benchmarks"
+    ),
+):
+    f"""
+    {icon_search()} Run diagnostics with optional CI-friendly output.
+    """
+    issues = diagnose_env(full=full, show_header=not ci)
+    exit_code = get_exit_code(issues)
+
+    if ci:
+        payload = build_export_data(issues, include_metadata=True)
+        summary = payload["summary"]
+        typer.echo(
+            f"mlenvdoctor status={exit_code} passed={summary['passed']} "
+            f"warnings={summary['warnings']} critical={summary['critical']}"
+        )
+        for fix in payload["fixes"]:
+            typer.echo(f"FIX {fix['issue']}: {fix['command']}")
+    else:
+        print_diagnostic_table(issues)
+
+    raise typer.Exit(exit_code)
+
+
+@app.command()
+def report(
+    full: bool = typer.Option(
+        True, "--full/--quick", help="Generate a full report or a quick report"
+    ),
+    output_dir: Path = typer.Option(
+        Path("mlenvdoctor-report"),
+        "--output-dir",
+        "-o",
+        help="Directory where the report files will be written",
+    ),
+):
+    f"""
+    {icon_search()} Save a shareable diagnostics report.
+
+    Writes JSON and HTML reports that can be pasted into CI artifacts or shared with teammates.
+    """
+    issues = diagnose_env(full=full)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    json_path = output_dir / f"diagnostic-report-{timestamp}.json"
+    html_path = output_dir / f"diagnostic-report-{timestamp}.html"
+
+    export_json(issues, json_path)
+    export_html(issues, html_path)
+
+    console.print()
+    console.print(f"[green]{icon_check()} Saved JSON report: {json_path}[/green]")
+    console.print(f"[green]{icon_check()} Saved HTML report: {html_path}[/green]")
+
+    fixes = get_fix_commands(issues)
+    if fixes:
+        console.print()
+        console.print("[bold]Suggested fix commands:[/bold]")
+        for fix in fixes:
+            console.print(f"[yellow]- {fix['issue']}[/yellow]")
+            console.print(f"  [cyan]{fix['command']}[/cyan]")
+
+    raise typer.Exit(get_exit_code(issues))
 
 
 @app.command()
@@ -124,7 +253,27 @@ def fix(
     if success:
         console.print()
         console.print(f"[bold green]{icon_check()} Auto-fix completed![/bold green]")
-        console.print("[yellow]💡 Run 'mlenvdoctor diagnose' to verify fixes[/yellow]")
+        console.print("[yellow]Run 'mlenvdoctor diagnose' to verify fixes[/yellow]")
+
+
+@stack_app.command("llm-training")
+def stack_llm_training(
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Optional file path to write the stack requirements to",
+    ),
+):
+    """Print the recommended dependency stack for LLM fine-tuning."""
+    requirements = get_stack_requirements("llm-training")
+    content = "\n".join(requirements) + "\n"
+
+    if output is not None:
+        output.write_text(content, encoding="utf-8")
+        console.print(f"[green]{icon_check()} Wrote stack to {output}[/green]")
+    else:
+        typer.echo(content.rstrip())
 
 
 @app.command()
@@ -192,6 +341,16 @@ def smoke_test():
             f"[bold red]{icon_cross()} Smoke test failed. Run 'mlenvdoctor diagnose' for details.[/bold red]"
         )
         raise typer.Exit(1)
+
+
+@mcp_app.command("serve")
+def mcp_serve():
+    """Serve a minimal JSON-line MCP stub."""
+    raise typer.Exit(serve_mcp())
+
+
+app.add_typer(mcp_app, name="mcp")
+app.add_typer(stack_app, name="stack")
 
 
 def main_cli():

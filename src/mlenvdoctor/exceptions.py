@@ -11,7 +11,7 @@ class MLEnvDoctorError(Exception):
 
     def __str__(self) -> str:
         if self.suggestion:
-            return f"{self.message}\n💡 Suggestion: {self.suggestion}"
+            return f"{self.message}\nSuggestion: {self.suggestion}"
         return self.message
 
 

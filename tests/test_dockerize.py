@@ -37,6 +37,7 @@ def test_generate_dockerfile_service():
         content = result.read_text()
         assert "uvicorn" in content or "FastAPI" in content
         assert "EXPOSE" in content
+        assert "COPY requirements.txt" not in content
 
 
 def test_generate_service_template():
@@ -48,3 +49,4 @@ def test_generate_service_template():
         content = result.read_text()
         assert "FastAPI" in content
         assert "def health" in content
+        assert "HTTPException" not in content

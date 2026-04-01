@@ -1,250 +1,207 @@
-# 🔍 ML Environment Doctor
+# ML Environment Doctor
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)]([https://pypi.org/project/mlenvdoctor/])
+[![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)](https://pypi.org/project/mlenvdoctor/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/mlenvdoctor?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/mlenvdoctor)
-> **Single command fixes 90% of "my torch.cuda.is_available() is False" issues.**
+[![Repository](https://img.shields.io/badge/GitHub-Ml--env--doctor-black?logo=github)](https://github.com/Dheena731/Ml-env-doctor)
 
-ML Environment Doctor is a production-ready Python CLI that diagnoses, auto-fixes, and Dockerizes ML environments for LLM fine-tuning. It detects CUDA conflicts, generates locked requirements.txt/conda envs, tests GPU readiness with real LLM smoke tests, and outputs production Dockerfiles.
+> Single command fixes many "why is my ML environment broken?" problems.
 
-## 🎯 Why ML Environment Doctor?
+ML Environment Doctor is a Python CLI for diagnosing and repairing ML environments. It checks CUDA, PyTorch, TensorFlow/Keras, and JAX/Flax readiness, generates shareable reports, emits CI-friendly exit codes, and creates Dockerfile templates for training workflows.
 
-**Problem**: LLM fine-tuning setup is fragmented across StackOverflow answers, conflicting PyTorch/CUDA versions, and missing dependencies. Hours wasted debugging `torch.cuda.is_available() == False`.
+- Repository: `https://github.com/Dheena731/Ml-env-doctor`
+- PyPI: `https://pypi.org/project/mlenvdoctor/`
 
-**Solution**: ONE TOOL that:
-- ✅ Diagnoses your environment in <5 seconds
-- ✅ Auto-fixes 80% of common issues
-- ✅ Generates production-ready Dockerfiles
-- ✅ Tests GPU readiness with real models
-- ✅ Supports PyTorch 2.4+ with CUDA 12.1/12.4
+## Why ML Environment Doctor?
 
-## 🚀 Quick Start
+**Problem**: ML environment setup is fragmented across forum answers, conflicting CUDA wheels, and half-working virtual environments.
+
+**Solution**: one CLI that:
+
+- Diagnoses CUDA, Python, and ML framework issues quickly
+- Suggests copy-paste fixes for common failures
+- Emits machine-readable JSON and stable exit codes for CI
+- Saves HTML and JSON reports for teammates
+- Generates recommended dependency stacks for LLM training
+
+## Quick Start
 
 ```bash
 # Install
 pip install mlenvdoctor
 
-# Diagnose your environment
+# Human-readable diagnosis
 mlenvdoctor diagnose
 
-# Full diagnostic scan
+# Full scan
 mlenvdoctor diagnose --full
 
-# Auto-fix issues and generate requirements.txt
-mlenvdoctor fix
+# JSON to stdout for CI/parsers
+mlenvdoctor diagnose --json -
 
-# Generate Dockerfile for fine-tuning
-mlenvdoctor dockerize mistral-7b
+# CI-friendly compact summary
+mlenvdoctor doctor --ci
 
-# Run smoke test with real model
-mlenvdoctor test-model tinyllama
+# Save a shareable report bundle
+mlenvdoctor report
+
+# Generate a recommended LLM training requirements file
+mlenvdoctor stack llm-training -o requirements-llm-training.txt
 ```
 
-## 📋 Features
-
-### 🔍 Diagnosis
-
-- **CUDA Detection**: NVIDIA driver, CUDA version, GPU availability
-- **PyTorch/CUDA Compatibility**: Version matrix matching
-- **Library Checks**: transformers, peft, trl, datasets, accelerate
-- **GPU Memory**: Available memory for fine-tuning
-- **Disk Space**: HF cache space warnings (~50GB)
-- **Docker GPU**: nvidia-docker support detection
-- **Connectivity**: Hugging Face Hub access
+## 30-Second Quickstart
 
 ```bash
+pip install mlenvdoctor
+mlenvdoctor diagnose
+mlenvdoctor diagnose --json -
+mlenvdoctor report
+```
+
+If you are debugging a teammate's machine or a CI runner, start with `mlenvdoctor report` and share the generated JSON/HTML pair.
+
+## Features
+
+### Diagnosis
+
+- CUDA driver and GPU visibility checks
+- PyTorch CUDA availability and version checks
+- TensorFlow runtime and Keras 3 readiness checks
+- JAX backend and Flax installation checks
+- GPU memory warnings
+- Disk space checks for model cache usage
+- Docker GPU support detection
+- Hugging Face connectivity checks
+
+### Machine-Readable Output
+
+- `mlenvdoctor diagnose --json -` prints JSON to stdout
+- Exit codes are stable for automation:
+  - `0`: healthy
+  - `1`: warnings present
+  - `2`: critical issues present
+
+### Reports
+
+- `mlenvdoctor report` saves timestamped JSON and HTML reports
+- Output can be attached to CI jobs or shared with teammates
+
+### Fixes
+
+- Failures include copy-paste fix commands where possible
+- `mlenvdoctor fix` can generate `requirements.txt` or Conda environment files
+- `mlenvdoctor fix --venv` can create and use a virtual environment
+
+### Stacks
+
+- `mlenvdoctor stack llm-training` prints a recommended dependency stack for fine-tuning
+- `mlenvdoctor fix --stack llm-training` uses that stack for generated requirements
+
+### MCP
+
+- `mlenvdoctor mcp serve` exposes a minimal JSON-line MCP stub
+- Current stub tools:
+  - `diagnose`
+  - `get_fixes`
+
+## Examples
+
+### Diagnose
+
+```bash
+mlenvdoctor diagnose
 mlenvdoctor diagnose --full
+mlenvdoctor diagnose --json -
 ```
 
-Output:
-```
-🔍 Running ML Environment Diagnostics...
-
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ ML Environment Doctor - Diagnostic Results                                           ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ Issue              │ Status                        │ Severity │ Fix                    │
-├────────────────────┼───────────────────────────────┼──────────┼────────────────────────┤
-│ NVIDIA GPU Driver  │ ✅ PASS - CUDA 12.4          │ INFO     │                        │
-│ PyTorch CUDA       │ ✅ PASS - CUDA 12.4 (1 GPU)  │ INFO     │                        │
-│ transformers       │ ✅ PASS - 4.44.0              │ INFO     │                        │
-│ peft               │ ❌ FAIL - Not installed       │ CRITICAL │ pip install peft>=0.12 │
-└────────────────────┴───────────────────────────────┴──────────┴────────────────────────┘
-
-✅ Passed: 3
-❌ Critical Issues: 1
-```
-
-### 🔧 Auto-Fix
-
-Generates optimized `requirements.txt` or conda environment files based on detected issues.
+### CI
 
 ```bash
-# Generate requirements.txt
-mlenvdoctor fix
+mlenvdoctor doctor --ci
+mlenvdoctor doctor --ci --full
+```
 
-# Generate conda environment
+### Reports
+
+```bash
+mlenvdoctor report
+mlenvdoctor report --quick --output-dir artifacts/mlenvdoctor
+```
+
+### Stacks
+
+```bash
+mlenvdoctor stack llm-training
+mlenvdoctor stack llm-training -o requirements-llm-training.txt
+```
+
+### Auto-Fix
+
+```bash
+mlenvdoctor fix
 mlenvdoctor fix --conda
-
-# Create virtual environment and install
 mlenvdoctor fix --venv
+mlenvdoctor fix --stack llm-training
 ```
 
-### 🐳 Dockerize
-
-Generate production-ready Dockerfiles for ML fine-tuning.
+### Dockerize
 
 ```bash
-# Basic Dockerfile
 mlenvdoctor dockerize mistral-7b
-
-# FastAPI service template
 mlenvdoctor dockerize --service
-
-# Custom output
-mlenvdoctor dockerize tinyllama -o Dockerfile
 ```
 
-Generated Dockerfile includes:
-- NVIDIA CUDA 12.4 base image
-- PyTorch with CUDA support
-- ML libraries (transformers, peft, trl, accelerate)
-- Optimized layer caching
-- GPU runtime configuration
-
-### 🧪 Testing
-
-Run smoke tests with real LLM models to verify fine-tuning readiness.
+## Troubleshooting Examples
 
 ```bash
-# Test with TinyLlama (fast)
-mlenvdoctor test-model tinyllama
+# Your CI job wants JSON
+mlenvdoctor diagnose --json -
 
-# Test with Mistral-7B (requires 16GB+ GPU)
-mlenvdoctor test-model mistral-7b
+# Your team wants a report bundle
+mlenvdoctor report --output-dir artifacts/mlenvdoctor
 
-# LoRA smoke test
-mlenvdoctor smoke-test
+# Your pipeline wants a one-line summary plus fix hints
+mlenvdoctor doctor --ci
+
+# You want a starting dependency set for fine-tuning
+mlenvdoctor stack llm-training -o requirements-llm-training.txt
 ```
 
-## 📦 Installation
+## Installation
 
 ```bash
-# From PyPI 
+# From PyPI
 pip install mlenvdoctor
 
 # From source
-git clone https://github.com/dheena731/ml_env_doctor.git
-cd ml_env_doctor
+git clone https://github.com/Dheena731/Ml-env-doctor.git
+cd Ml-env-doctor
 pip install -e .
 ```
 
-## 🛠️ Development
+## Development
 
 ```bash
-# Clone repository
-git clone https://github.com/dheena731/ml_env_doctor.git
-cd ml_env_doctor
-
-# Install with dev dependencies
+git clone https://github.com/Dheena731/Ml-env-doctor.git
+cd Ml-env-doctor
 pip install -e ".[dev]"
-
-# Run tests
 pytest
-
-# Run linters
-black src/ tests/
 ruff check src/ tests/
+black src/ tests/
 mypy src/
-
-# Pre-commit hooks
-pre-commit install
 ```
 
-## 📚 CLI Reference
+## Repository
 
-### `diagnose`
+- GitHub: [Dheena731/Ml-env-doctor](https://github.com/Dheena731/Ml-env-doctor)
+- Issues: [Open an issue](https://github.com/Dheena731/Ml-env-doctor/issues)
+- Clone URL: `https://github.com/Dheena731/Ml-env-doctor.git`
 
-Diagnose ML environment issues.
+## Contributing
 
-```bash
-mlenvdoctor diagnose           # Quick scan
-mlenvdoctor diagnose --full    # Full scan with GPU benchmark
-```
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### `fix`
+## License
 
-Auto-fix environment issues.
-
-```bash
-mlenvdoctor fix                # Generate requirements.txt
-mlenvdoctor fix --conda        # Generate conda environment
-mlenvdoctor fix --venv         # Create virtual environment
-mlenvdoctor fix --stack minimal # Use minimal ML stack
-```
-
-### `dockerize`
-
-Generate Dockerfile for ML fine-tuning.
-
-```bash
-mlenvdoctor dockerize [model]              # Model: mistral-7b, tinyllama, gpt2
-mlenvdoctor dockerize --service            # FastAPI service template
-mlenvdoctor dockerize mistral-7b -o Dockerfile
-```
-
-### `test-model`
-
-Test model loading and forward pass.
-
-```bash
-mlenvdoctor test-model tinyllama
-mlenvdoctor test-model mistral-7b
-mlenvdoctor test-model gpt2
-```
-
-### `smoke-test`
-
-Run LoRA fine-tuning smoke test.
-
-```bash
-mlenvdoctor smoke-test
-```
-
-## 🎯 Use Cases
-
-1. **Fresh Setup**: Diagnose and fix a new ML environment in minutes
-2. **CUDA Issues**: Detect and fix PyTorch/CUDA version mismatches
-3. **Production Deployment**: Generate Dockerfiles for containerized training
-4. **CI/CD**: Verify GPU readiness in automated pipelines
-5. **Environment Debugging**: Quick diagnosis of "why is my GPU not working?"
-
-## 🤝 Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Built with [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/)
-- Inspired by the LLM fine-tuning community's setup struggles
-- Thanks to Hugging Face for amazing ML libraries
-
-## ⭐ Star History
-
-If you find this tool helpful, please star the repository! Our goal: **500 GitHub stars in the first month**.
-
----
-
-**Made with ❤️ for the ML fine-tuning community**
-
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

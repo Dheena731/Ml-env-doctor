@@ -29,7 +29,7 @@ def test_diagnose_basic():
         timeout=30,
     )
     # Should not crash, even if there are issues
-    assert result.returncode == 0 or result.returncode == 1
+    assert result.returncode in (0, 1, 2)
     assert "Running ML Environment Diagnostics" in result.stdout or "diagnose" in result.stderr.lower()
 
 
@@ -42,7 +42,22 @@ def test_diagnose_full():
         timeout=60,
     )
     # Should not crash
-    assert result.returncode == 0 or result.returncode == 1
+    assert result.returncode in (0, 1, 2)
+
+
+def test_diagnose_json_stdout():
+    """JSON stdout mode should return parseable machine-readable output."""
+    result = subprocess.run(
+        ["mlenvdoctor", "diagnose", "--json", "-"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode in (0, 1, 2)
+    payload = json.loads(result.stdout)
+    assert "issues" in payload
+    assert "exit_code" in payload
 
 
 def test_json_export(tmp_path: Path):
@@ -169,6 +184,30 @@ def test_dockerize_command():
     assert "docker" in result.stdout.lower()
 
 
+def test_doctor_command():
+    """Test doctor command help."""
+    result = subprocess.run(
+        ["mlenvdoctor", "doctor", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    assert "ci" in result.stdout.lower()
+
+
+def test_stack_command():
+    """Test stack command help."""
+    result = subprocess.run(
+        ["mlenvdoctor", "stack", "llm-training", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    assert "llm-training" in result.stdout.lower() or "output" in result.stdout.lower()
+
+
 def test_invalid_log_level():
     """Test that invalid log level is rejected."""
     result = subprocess.run(
@@ -179,3 +218,18 @@ def test_invalid_log_level():
     )
     # Should fail or show error
     assert result.returncode != 0 or "invalid" in result.stderr.lower() or "error" in result.stderr.lower()
+
+
+def test_help_survives_log_file_permission_issue(tmp_path: Path):
+    """Help output should still work if the log path cannot be opened."""
+    blocked_path = tmp_path
+
+    result = subprocess.run(
+        ["mlenvdoctor", "--log-file", str(blocked_path), "fix", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert "fix" in result.stdout.lower()

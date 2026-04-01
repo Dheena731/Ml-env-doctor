@@ -8,17 +8,7 @@ try:
 except ImportError:
     torch = None  # type: ignore
 
-import sys
-
-from rich.console import Console
-
-from .utils import print_error, print_info, print_success
-
-# Configure console for Windows compatibility
-if sys.platform == "win32":
-    console = Console(legacy_windows=True, force_terminal=True)
-else:
-    console = Console()
+from .utils import print_error, print_info, print_success, status_message
 
 
 def benchmark_gpu_ops() -> Dict[str, float]:
@@ -30,7 +20,7 @@ def benchmark_gpu_ops() -> Dict[str, float]:
     device = torch.device("cuda:0")
 
     # Matrix multiplication benchmark
-    with console.status("[bold green]Running GPU benchmark..."):
+    with status_message("[bold green]Running GPU benchmark...[/bold green]"):
         sizes = [(1024, 1024), (2048, 2048), (4096, 4096)]
         for size in sizes:
             a = torch.randn(size, device=device)
@@ -78,7 +68,7 @@ def smoke_test_lora() -> bool:
         # Use a very small model for smoke test
         model_name = "gpt2"  # Smallest common model
         try:
-            with console.status(f"[bold green]Loading {model_name}..."):
+            with status_message(f"[bold green]Loading {model_name}...[/bold green]"):
                 tokenizer = AutoTokenizer.from_pretrained(model_name)
                 if tokenizer.pad_token is None:
                     tokenizer.pad_token = tokenizer.eos_token
@@ -97,7 +87,7 @@ def smoke_test_lora() -> bool:
                 task_type="CAUSAL_LM",
             )
 
-            with console.status("[bold green]Applying LoRA..."):
+            with status_message("[bold green]Applying LoRA...[/bold green]"):
                 model = get_peft_model(model, lora_config)
 
             # Create dummy input
@@ -105,7 +95,7 @@ def smoke_test_lora() -> bool:
             inputs = tokenizer(dummy_text, return_tensors="pt").to(device)
 
             # Forward pass
-            with console.status("[bold green]Running forward pass..."):
+            with status_message("[bold green]Running forward pass...[/bold green]"):
                 with torch.no_grad():
                     _ = model(**inputs)
 
@@ -142,7 +132,7 @@ def test_model(model_name: str = "tinyllama") -> bool:
     try:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
-        console.print(f"[bold blue]Testing model: {actual_model_name}[/bold blue]")
+        print_info(f"Testing model: {actual_model_name}")
 
         device = torch.device("cuda:0")
         free_mem, total_mem = torch.cuda.mem_get_info(0)
@@ -156,7 +146,7 @@ def test_model(model_name: str = "tinyllama") -> bool:
                 )
                 return False
 
-        with console.status(f"[bold green]Loading {actual_model_name}..."):
+        with status_message(f"[bold green]Loading {actual_model_name}...[/bold green]"):
             try:
                 tokenizer = AutoTokenizer.from_pretrained(actual_model_name)
                 if tokenizer.pad_token is None:
@@ -165,8 +155,7 @@ def test_model(model_name: str = "tinyllama") -> bool:
                 model = AutoModelForCausalLM.from_pretrained(
                     actual_model_name,
                     torch_dtype=torch.float16,
-                    device_map="auto",
-                )
+                ).to(device)
 
                 # Test forward pass
                 dummy_text = "Test"

@@ -2,10 +2,9 @@
 
 import subprocess
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import List, Optional, Tuple
-
-import sys
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -15,7 +14,6 @@ from .icons import icon_check, icon_cross, icon_info, icon_warning
 
 # Configure console for Windows compatibility
 if sys.platform == "win32":
-    # Use legacy Windows renderer if needed
     console = Console(legacy_windows=True, force_terminal=True)
 else:
     console = Console()
@@ -148,6 +146,16 @@ def with_spinner(message: str):
         TextColumn("[progress.description]{task.description}"),
         console=console,
     )
+
+
+def status_message(message: str):
+    """Return a status context that falls back safely on non-UTF8 Windows consoles."""
+    encoding = (getattr(sys.stdout, "encoding", "") or "").lower()
+    if sys.platform == "win32" and encoding != "utf-8":
+        plain_message = message.replace("[bold green]", "").replace("[/bold green]", "")
+        print_info(plain_message)
+        return nullcontext()
+    return console.status(message)
 
 
 def format_size(size_bytes: int) -> str:

@@ -125,7 +125,7 @@ def validate_stack_name(stack: str) -> str:
     Raises:
         ConfigurationError: If stack is invalid
     """
-    valid_stacks = {"trl-peft", "minimal"}
+    valid_stacks = {"trl-peft", "minimal", "llm-training"}
     stack_lower = stack.lower() if isinstance(stack, str) else str(stack).lower()
 
     if stack_lower not in valid_stacks:

@@ -1,7 +1,7 @@
 """Parallel execution utilities for independent operations."""
 
 import concurrent.futures
-from typing import Callable, Iterable, List, TypeVar
+from typing import Callable, Iterable, List, TypeVar, cast
 
 from .logger import logger
 
@@ -39,30 +39,28 @@ def run_parallel(
     if not items_list:
         return []
 
-    # Use ThreadPoolExecutor for I/O-bound operations
+    # Use ThreadPoolExecutor for I/O-bound operations.
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
-        future_to_item = {executor.submit(func, item): item for item in items_list}
-
-        results: List[R] = []
+        future_to_index = {
+            executor.submit(func, item): index for index, item in enumerate(items_list)
+        }
+        results: List[R | None] = [None] * len(items_list)
         completed = 0
 
-        # Process completed tasks
-        for future in concurrent.futures.as_completed(future_to_item, timeout=timeout):
-            item = future_to_item[future]
+        for future in concurrent.futures.as_completed(future_to_index, timeout=timeout):
+            index = future_to_index[future]
+            item = items_list[index]
             try:
-                result = future.result()
-                results.append(result)
+                results[index] = future.result()
                 completed += 1
             except Exception as e:
                 logger.error(f"Error processing {item}: {e}")
-                # Re-raise to maintain error behavior
                 raise
 
         if completed != len(items_list):
             raise RuntimeError(f"Only {completed}/{len(items_list)} tasks completed")
 
-        return results
+        return [cast(R, result) for result in results]
 
 
 def run_parallel_with_results(
@@ -100,16 +98,17 @@ def run_parallel_with_results(
         return []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_item = {executor.submit(func, item): item for item in items_list}
+        future_to_index = {
+            executor.submit(func, item): index for index, item in enumerate(items_list)
+        }
+        results: List[tuple[T, R | Exception] | None] = [None] * len(items_list)
 
-        results: List[tuple[T, R | Exception]] = []
-
-        for future in concurrent.futures.as_completed(future_to_item, timeout=timeout):
-            item = future_to_item[future]
+        for future in concurrent.futures.as_completed(future_to_index, timeout=timeout):
+            index = future_to_index[future]
+            item = items_list[index]
             try:
-                result = future.result()
-                results.append((item, result))
+                results[index] = (item, future.result())
             except Exception as e:
-                results.append((item, e))
+                results[index] = (item, e)
 
-        return results
+        return [cast(tuple[T, R | Exception], result) for result in results]

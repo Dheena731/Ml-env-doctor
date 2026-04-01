@@ -1,11 +1,12 @@
 """Export functionality for diagnostic results."""
 
+import html
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .diagnose import DiagnosticIssue
+from .diagnose import DiagnosticIssue, get_fix_commands
 
 
 def issue_to_dict(issue: DiagnosticIssue) -> Dict[str, Any]:
@@ -17,6 +18,55 @@ def issue_to_dict(issue: DiagnosticIssue) -> Dict[str, Any]:
         "fix": issue.fix,
         "details": issue.details,
     }
+
+
+def build_summary(issues: List[DiagnosticIssue]) -> Dict[str, int]:
+    """Build a diagnostic summary block."""
+    critical_count = sum(1 for i in issues if i.severity == "critical" and "FAIL" in i.status)
+    warning_count = sum(
+        1 for i in issues if i.severity == "warning" and ("WARN" in i.status or "FAIL" in i.status)
+    )
+    pass_count = sum(1 for i in issues if "PASS" in i.status)
+    return {
+        "total": len(issues),
+        "passed": pass_count,
+        "warnings": warning_count,
+        "critical": critical_count,
+    }
+
+
+def get_exit_code(issues: List[DiagnosticIssue]) -> int:
+    """Return a machine-readable exit code for diagnostics."""
+    summary = build_summary(issues)
+    if summary["critical"] > 0:
+        return 2
+    if summary["warnings"] > 0:
+        return 1
+    return 0
+
+
+def build_export_data(
+    issues: List[DiagnosticIssue],
+    include_metadata: bool = True,
+) -> Dict[str, Any]:
+    """Build the shared machine-readable diagnostics payload."""
+    export_data: Dict[str, Any] = {
+        "issues": [issue_to_dict(issue) for issue in issues],
+        "summary": build_summary(issues),
+        "exit_code": get_exit_code(issues),
+        "fixes": get_fix_commands(issues),
+    }
+
+    if include_metadata:
+        from . import __version__
+
+        export_data["metadata"] = {
+            "version": __version__,
+            "timestamp": datetime.now().isoformat(),
+            "tool": "mlenvdoctor",
+        }
+
+    return export_data
 
 
 def export_json(
@@ -38,40 +88,7 @@ def export_json(
     if output_file is None:
         output_file = Path("diagnostic-results.json")
 
-    # Convert issues to dictionaries
-    issues_data = [issue_to_dict(issue) for issue in issues]
-
-    # Calculate summary
-    critical_count = sum(
-        1 for i in issues if i.severity == "critical" and "FAIL" in i.status
-    )
-    warning_count = sum(
-        1 for i in issues if i.severity == "warning" and ("WARN" in i.status or "FAIL" in i.status)
-    )
-    pass_count = sum(1 for i in issues if "PASS" in i.status)
-
-    # Build export data
-    export_data: Dict[str, Any] = {
-        "issues": issues_data,
-        "summary": {
-            "total": len(issues),
-            "passed": pass_count,
-            "warnings": warning_count,
-            "critical": critical_count,
-        },
-    }
-
-    # Add metadata if requested
-    if include_metadata:
-        from . import __version__
-
-        export_data["metadata"] = {
-            "version": __version__,
-            "timestamp": datetime.now().isoformat(),
-            "tool": "mlenvdoctor",
-        }
-
-    # Write to file
+    export_data = build_export_data(issues, include_metadata=include_metadata)
     output_file.write_text(json.dumps(export_data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     return output_file
@@ -125,14 +142,7 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
     if output_file is None:
         output_file = Path("diagnostic-results.html")
 
-    # Calculate summary
-    critical_count = sum(
-        1 for i in issues if i.severity == "critical" and "FAIL" in i.status
-    )
-    warning_count = sum(
-        1 for i in issues if i.severity == "warning" and ("WARN" in i.status or "FAIL" in i.status)
-    )
-    pass_count = sum(1 for i in issues if "PASS" in i.status)
+    summary = build_summary(issues)
 
     from . import __version__
 
@@ -227,19 +237,19 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
     <div class="summary">
         <div class="summary-card">
             <h3>Total Checks</h3>
-            <div class="value">{len(issues)}</div>
+            <div class="value">{summary["total"]}</div>
         </div>
         <div class="summary-card">
             <h3>Passed</h3>
-            <div class="value passed">{pass_count}</div>
+            <div class="value passed">{summary["passed"]}</div>
         </div>
         <div class="summary-card">
             <h3>Warnings</h3>
-            <div class="value warning">{warning_count}</div>
+            <div class="value warning">{summary["warnings"]}</div>
         </div>
         <div class="summary-card">
             <h3>Critical Issues</h3>
-            <div class="value critical">{critical_count}</div>
+            <div class="value critical">{summary["critical"]}</div>
         </div>
     </div>
 
@@ -267,11 +277,11 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
 
         html_content += f"""
             <tr class="{severity_class}">
-                <td><strong>{issue.name}</strong></td>
-                <td class="{status_class}">{issue.status}</td>
-                <td>{issue.severity.upper()}</td>
-                <td>{issue.fix or '-'}</td>
-                <td>{issue.details or '-'}</td>
+                <td><strong>{html.escape(issue.name)}</strong></td>
+                <td class="{status_class}">{html.escape(issue.status)}</td>
+                <td>{html.escape(issue.severity.upper())}</td>
+                <td>{html.escape(issue.fix or '-')}</td>
+                <td>{html.escape(issue.details or '-')}</td>
             </tr>
 """
 
@@ -280,7 +290,7 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
     </table>
 
     <div class="footer">
-        <p>Generated by ML Environment Doctor | <a href="https://github.com/dheena731/ml_env_doctor">GitHub</a></p>
+        <p>Generated by ML Environment Doctor | <a href="https://github.com/Dheena731/Ml-env-doctor">GitHub</a></p>
     </div>
 </body>
 </html>

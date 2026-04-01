@@ -14,9 +14,9 @@ from .utils import (
     print_success,
     print_warning,
     run_command,
+    status_message,
 )
 
-# ML Stack definitions
 ML_STACKS = {
     "trl-peft": [
         "torch>=2.4.0",
@@ -33,36 +33,51 @@ ML_STACKS = {
         "transformers>=4.44.0",
         "accelerate>=1.0.0",
     ],
+    "llm-training": [
+        "torch>=2.4.0",
+        "transformers>=4.44.0",
+        "datasets>=2.20.0",
+        "accelerate>=1.0.0",
+        "peft>=0.12.0",
+        "trl>=0.9.0",
+        "bitsandbytes>=0.43.0",
+        "sentencepiece>=0.1.99",
+        "safetensors>=0.4.3",
+        "tensorboard>=2.16.0",
+    ],
 }
+
+
+def get_stack_requirements(stack: str) -> list[str]:
+    """Return the requirement list for a named stack."""
+    if stack not in ML_STACKS:
+        print_error(f"Unknown stack: {stack}. Available: {list(ML_STACKS.keys())}")
+        sys.exit(1)
+    return ML_STACKS[stack]
 
 
 def generate_requirements_txt(
     stack: str = "trl-peft", output_file: str = "requirements-mlenvdoctor.txt"
 ) -> Path:
     """Generate requirements.txt file."""
-    if stack not in ML_STACKS:
-        print_error(f"Unknown stack: {stack}. Available: {list(ML_STACKS.keys())}")
-        sys.exit(1)
-
-    requirements = ML_STACKS[stack]
+    requirements = get_stack_requirements(stack)
     output_path = Path(output_file)
 
-    # Check if CUDA is available to add PyTorch index URL
     try:
         import torch
 
         if torch.cuda.is_available():
-            # Add comment about CUDA index
             content = "# PyTorch with CUDA 12.4\n"
-            content += "# Install with: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
-            content += "# Then: pip install -r requirements-mlenvdoctor.txt\n\n"
+            content += (
+                "# Install with: pip install torch --index-url "
+                "https://download.pytorch.org/whl/cu124\n"
+            )
+            content += f"# Then: pip install -r {output_path.name}\n\n"
         else:
             content = "# Standard PyTorch (CPU or CUDA)\n\n"
     except ImportError:
         content = "# PyTorch installation\n"
-        content += (
-            "# For CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
-        )
+        content += "# For CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
         content += "# For CPU: pip install torch\n\n"
 
     content += "\n".join(requirements)
@@ -77,11 +92,7 @@ def generate_conda_env(
     stack: str = "trl-peft", output_file: str = "environment-mlenvdoctor.yml"
 ) -> Path:
     """Generate conda environment file."""
-    if stack not in ML_STACKS:
-        print_error(f"Unknown stack: {stack}. Available: {list(ML_STACKS.keys())}")
-        sys.exit(1)
-
-    requirements = ML_STACKS[stack]
+    requirements = get_stack_requirements(stack)
     output_path = Path(output_file)
 
     content = "name: mlenvdoctor\n"
@@ -97,8 +108,7 @@ def generate_conda_env(
     content += "  - pip\n"
     content += "  - pip:\n"
 
-    # Filter out torch from pip requirements (it's in conda)
-    pip_requirements = [r for r in requirements if not r.startswith("torch")]
+    pip_requirements = [req for req in requirements if not req.startswith("torch")]
     for req in pip_requirements:
         content += f"    - {req}\n"
 
@@ -108,7 +118,18 @@ def generate_conda_env(
     return output_path
 
 
-def install_requirements(requirements_file: str, use_conda: bool = False) -> bool:
+def get_virtualenv_python(env_path: Path) -> Path:
+    """Return the Python executable inside a virtual environment."""
+    if sys.platform == "win32":
+        return env_path / "Scripts" / "python.exe"
+    return env_path / "bin" / "python"
+
+
+def install_requirements(
+    requirements_file: str,
+    use_conda: bool = False,
+    python_executable: Optional[str] = None,
+) -> bool:
     """Install requirements from file."""
     req_path = Path(requirements_file)
     if not req_path.exists():
@@ -120,13 +141,12 @@ def install_requirements(requirements_file: str, use_conda: bool = False) -> boo
         if not check_command_exists("conda"):
             print_error("conda not found. Install Miniconda/Anaconda first.")
             return False
-        # For conda, user should create env manually
         print_warning("Conda environment file generated. Please create environment manually.")
         return True
 
+    python_cmd = python_executable or sys.executable
     print_info(f"Installing requirements from {requirements_file}...")
 
-    # First install PyTorch with CUDA if needed
     try:
         import torch
 
@@ -135,7 +155,7 @@ def install_requirements(requirements_file: str, use_conda: bool = False) -> boo
             try:
                 result = run_command(
                     [
-                        sys.executable,
+                        python_cmd,
                         "-m",
                         "pip",
                         "install",
@@ -154,7 +174,7 @@ def install_requirements(requirements_file: str, use_conda: bool = False) -> boo
         try:
             result = run_command(
                 [
-                    sys.executable,
+                    python_cmd,
                     "-m",
                     "pip",
                     "install",
@@ -169,19 +189,18 @@ def install_requirements(requirements_file: str, use_conda: bool = False) -> boo
         except Exception as e:
             print_warning(f"PyTorch CUDA installation failed: {e}")
 
-    # Install other requirements
     try:
-        with console.status("[bold green]Installing requirements..."):
+        with status_message("[bold green]Installing requirements...[/bold green]"):
             result = run_command(
-                [sys.executable, "-m", "pip", "install", "-r", requirements_file],
+                [python_cmd, "-m", "pip", "install", "-r", requirements_file],
                 timeout=600,
             )
             if result.returncode == 0:
                 print_success("Requirements installed successfully!")
                 return True
-            else:
-                print_error(f"Installation failed: {result.stderr}")
-                return False
+
+            print_error(f"Installation failed: {result.stderr}")
+            return False
     except Exception as e:
         print_error(f"Installation error: {e}")
         return False
@@ -215,9 +234,8 @@ def auto_fix(use_conda: bool = False, create_venv: bool = False, stack: str = "t
     """Auto-fix environment issues based on diagnostics."""
     console.print(f"[bold blue]{icon_wrench()} Running Auto-Fix...[/bold blue]\n")
 
-    # Run diagnostics
     issues = diagnose_env(full=False)
-    critical_issues = [i for i in issues if i.severity == "critical" and "FAIL" in i.status]
+    critical_issues = [issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status]
 
     if not critical_issues:
         print_success("No critical issues found! Environment looks good.")
@@ -225,31 +243,33 @@ def auto_fix(use_conda: bool = False, create_venv: bool = False, stack: str = "t
 
     console.print(f"[yellow]Found {len(critical_issues)} critical issue(s) to fix[/yellow]\n")
 
-    # Generate requirements
     if use_conda:
         env_file = generate_conda_env(stack=stack)
         print_info("Conda environment file generated. Create environment manually:")
         console.print(f"[cyan]  conda env create -f {env_file}[/cyan]")
         return True
+
+    req_file = generate_requirements_txt(stack=stack)
+    venv_python: Optional[str] = None
+
+    if create_venv:
+        venv_path = create_virtualenv()
+        if venv_path:
+            venv_python = str(get_virtualenv_python(venv_path))
+            print_info(f"Using virtual environment Python: {venv_python}")
+
+    console.print()
+    install = console.input("[bold yellow]Install requirements now? (y/n): [/bold yellow]")
+    if install.lower() in ["y", "yes"]:
+        return install_requirements(
+            str(req_file),
+            use_conda=use_conda,
+            python_executable=venv_python,
+        )
+
+    print_info("Requirements file generated. Install manually with:")
+    if venv_python:
+        console.print(f"[cyan]  {venv_python} -m pip install -r {req_file}[/cyan]")
     else:
-        req_file = generate_requirements_txt(stack=stack)
-
-        if create_venv:
-            venv_path = create_virtualenv()
-            if venv_path:
-                # Update pip command to use venv
-                if sys.platform == "win32":
-                    pip_cmd = str(venv_path / "Scripts" / "python.exe")
-                else:
-                    pip_cmd = str(venv_path / "bin" / "python")
-                print_info(f"Using virtual environment Python: {pip_cmd}")
-
-        # Offer to install
-        console.print()
-        install = console.input("[bold yellow]Install requirements now? (y/n): [/bold yellow]")
-        if install.lower() in ["y", "yes"]:
-            return install_requirements(str(req_file), use_conda=use_conda)
-        else:
-            print_info("Requirements file generated. Install manually with:")
-            console.print(f"[cyan]  pip install -r {req_file}[/cyan]")
-            return True
+        console.print(f"[cyan]  pip install -r {req_file}[/cyan]")
+    return True

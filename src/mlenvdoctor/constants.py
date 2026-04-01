@@ -40,7 +40,7 @@ SUPPORTED_MODELS: Final[dict[str, str]] = {
 }
 
 # ML Stacks
-ML_STACKS: Final[list[str]] = ["trl-peft", "minimal"]
+ML_STACKS: Final[list[str]] = ["trl-peft", "minimal", "llm-training"]
 
 # Diagnostic check names
 CHECK_CUDA_DRIVER: Final[str] = "cuda_driver"

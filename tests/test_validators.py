@@ -54,6 +54,7 @@ def test_validate_stack_name_valid():
     """Test valid stack names."""
     assert validate_stack_name("trl-peft") == "trl-peft"
     assert validate_stack_name("MINIMAL") == "minimal"
+    assert validate_stack_name("LLM-TRAINING") == "llm-training"
 
 
 def test_validate_stack_name_invalid():

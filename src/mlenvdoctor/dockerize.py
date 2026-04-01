@@ -90,7 +90,6 @@ RUN pip install --no-cache-dir fastapi uvicorn pydantic
 
 # Copy service code
 COPY app.py /app/app.py
-COPY requirements.txt /app/requirements.txt
 WORKDIR /app
 
 # Expose port
@@ -117,8 +116,8 @@ WORKDIR /app
 # Install additional dependencies if requirements.txt exists
 RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
 
-# Default command (override in docker run)
-CMD ["python", "train.py"]
+# Default command (override in docker run with your training script)
+CMD ["python", "-c", "print('ML Environment Doctor container is ready. Override CMD with your training entrypoint.')"]
 
 """
 
@@ -159,9 +158,8 @@ def generate_service_template(output_file: str = "app.py") -> Path:
     output_path = Path(output_file)
 
     service_content = '''"""FastAPI service template for ML fine-tuning."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import Optional
 
 app = FastAPI(title="ML Fine-tuning Service")
 
