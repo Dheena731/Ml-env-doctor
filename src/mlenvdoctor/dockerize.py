@@ -1,128 +1,143 @@
 """Dockerfile generation for ML Environment Doctor."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from .config import load_config
+from .fix import get_stack_requirements
 from .utils import console, print_info, print_success
 
-# Model-specific templates
-MODEL_TEMPLATES = {
-    "mistral-7b": {
-        "base_image": "nvidia/cuda:12.4.0-devel-ubuntu22.04",
-        "model_name": "mistralai/Mistral-7B-v0.1",
-        "memory": "16GB+",
-    },
-    "tinyllama": {
-        "base_image": "nvidia/cuda:12.4.0-devel-ubuntu22.04",
-        "model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        "memory": "4GB+",
-    },
-    "gpt2": {
-        "base_image": "nvidia/cuda:12.4.0-devel-ubuntu22.04",
-        "model_name": "gpt2",
-        "memory": "2GB+",
-    },
+
+@dataclass(frozen=True)
+class DockerModelProfile:
+    """Container generation profile for a supported model."""
+
+    slug: str
+    model_name: str
+    recommended_memory: str
+    stack: str
+
+
+MODEL_PROFILES = {
+    "mistral-7b": DockerModelProfile(
+        slug="mistral-7b",
+        model_name="mistralai/Mistral-7B-v0.1",
+        recommended_memory="16GB+",
+        stack="llm-training",
+    ),
+    "tinyllama": DockerModelProfile(
+        slug="tinyllama",
+        model_name="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        recommended_memory="4GB+",
+        stack="minimal",
+    ),
+    "gpt2": DockerModelProfile(
+        slug="gpt2",
+        model_name="gpt2",
+        recommended_memory="2GB+",
+        stack="minimal",
+    ),
 }
+
+
+def _build_pip_install_lines(packages: list[str]) -> str:
+    """Render pip install lines for Dockerfiles."""
+    rendered = "RUN pip install --no-cache-dir \\\n"
+    for index, package in enumerate(packages):
+        suffix = " \\\n" if index < len(packages) - 1 else "\n"
+        rendered += f"    {package}{suffix}"
+    return rendered
+
+
+def _resolve_base_image(base_image: Optional[str]) -> str:
+    """Resolve the base image from args or config."""
+    config = load_config()
+    configured = str(config.get("docker", {}).get("default_base_image", "")).strip()
+    return base_image or configured or "nvidia/cuda:12.4.0-devel-ubuntu22.04"
 
 
 def generate_dockerfile(
     model_name: Optional[str] = None,
     service: bool = False,
     output_file: str = "Dockerfile.mlenvdoctor",
+    *,
+    stack: Optional[str] = None,
+    base_image: Optional[str] = None,
+    python_version: str = "3.10",
+    include_healthcheck: bool = True,
 ) -> Path:
-    """Generate a Dockerfile for ML fine-tuning."""
+    """Generate a Dockerfile for ML workloads or service deployment."""
     output_path = Path(output_file)
+    model_profile = MODEL_PROFILES.get(model_name.lower()) if model_name else None
+    if model_name and model_profile is None:
+        print_info(f"Unknown model template: {model_name}. Using generic settings.")
 
-    # Get model info if specified
-    model_info = None
-    if model_name:
-        model_info = MODEL_TEMPLATES.get(model_name.lower())
-        if not model_info:
-            print_info(f"Unknown model template: {model_name}. Using generic template.")
+    selected_stack = stack or (model_profile.stack if model_profile else "llm-training")
+    base = _resolve_base_image(base_image)
+    packages = get_stack_requirements(selected_stack)
+    pip_install_block = _build_pip_install_lines(packages + ["numpy>=1.24.0", "scipy>=1.10.0"])
 
-    # Choose base image
-    base_image = model_info["base_image"] if model_info else "nvidia/cuda:12.4.0-devel-ubuntu22.04"
-
+    python_pkg = f"python{python_version}"
     dockerfile_content = f"""# ML Environment Doctor - Generated Dockerfile
-# Base image with CUDA support
-FROM {base_image}
+# Profile: {"service" if service else "training"}
+FROM {base}
 
-# Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV HF_HOME=/root/.cache/huggingface
 
-# Install Python and system dependencies
 RUN apt-get update && apt-get install -y \\
-    python3.10 \\
+    {python_pkg} \\
     python3-pip \\
     git \\
     curl \\
     && rm -rf /var/lib/apt/lists/*
 
-# Create symlink for python
-RUN ln -s /usr/bin/python3 /usr/bin/python
-
-# Upgrade pip
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Install PyTorch with CUDA 12.4
 RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-
-# Install ML libraries
-RUN pip install --no-cache-dir \\
-    transformers>=4.44.0 \\
-    peft>=0.12.0 \\
-    trl>=0.9.0 \\
-    datasets>=2.20.0 \\
-    accelerate>=1.0.0 \\
-    bitsandbytes>=0.43.0 \\
-    sentencepiece>=0.1.99 \\
-    numpy>=1.24.0 \\
-    scipy>=1.10.0
-
+{pip_install_block}
 """
+
+    if model_profile:
+        dockerfile_content += (
+            f"\n# Model profile: {model_profile.model_name}\n"
+            f"# Recommended GPU memory: {model_profile.recommended_memory}\n"
+        )
 
     if service:
-        dockerfile_content += """# Install FastAPI and uvicorn for service
+        dockerfile_content += """
 RUN pip install --no-cache-dir fastapi uvicorn pydantic
 
-# Copy service code
 COPY app.py /app/app.py
 WORKDIR /app
-
-# Expose port
 EXPOSE 8000
-
-# Health check
+"""
+        if include_healthcheck:
+            dockerfile_content += """
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\
     CMD curl -f http://localhost:8000/health || exit 1
-
-# Run service
+"""
+        dockerfile_content += """
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
-
 """
     else:
-        if model_info:
-            dockerfile_content += f"""# Model: {model_info['model_name']}
-# Recommended GPU memory: {model_info['memory']}
-
-"""
-        dockerfile_content += """# Copy application code
+        dockerfile_content += """
 COPY . /app
 WORKDIR /app
 
-# Install additional dependencies if requirements.txt exists
 RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
 
-# Default command (override in docker run with your training script)
-CMD ["python", "-c", "print('ML Environment Doctor container is ready. Override CMD with your training entrypoint.')"]
-
+CMD ["python", "-c", "print('ML Environment Doctor container is ready. Override CMD with your entrypoint.')"]
 """
 
-    # Add .dockerignore suggestion comment
-    dockerfile_content += """# Recommended .dockerignore:
+    dockerfile_content += """
+
+# Recommended .dockerignore:
 # __pycache__/
 # *.pyc
 # .git/
@@ -132,15 +147,15 @@ CMD ["python", "-c", "print('ML Environment Doctor container is ready. Override 
 # data/
 # outputs/
 # logs/
-
 """
 
     output_path.write_text(dockerfile_content, encoding="utf-8")
     print_success(f"Generated Dockerfile: {output_file}")
-
-    if model_info:
-        console.print(f"[cyan]Model: {model_info['model_name']}[/cyan]")
-        console.print(f"[cyan]Recommended GPU: {model_info['memory']}[/cyan]")
+    console.print(f"[cyan]Base image: {base}[/cyan]")
+    console.print(f"[cyan]Stack: {selected_stack}[/cyan]")
+    if model_profile:
+        console.print(f"[cyan]Model: {model_profile.model_name}[/cyan]")
+        console.print(f"[cyan]Recommended GPU: {model_profile.recommended_memory}[/cyan]")
 
     console.print()
     console.print("[bold]Build and run:[/bold]")
@@ -178,20 +193,15 @@ async def health():
 @app.get("/")
 async def root():
     """Root endpoint."""
-    return {"message": "ML Fine-tuning Service", "version": "0.1.0"}
+    return {"message": "ML Fine-tuning Service", "version": "0.2.0"}
 
 
-# Add your fine-tuning endpoints here
-# Example:
-# @app.post("/fine-tune")
-# async def fine_tune(model_name: str, dataset_path: str):
-#     ...
-
+# Add your inference or fine-tuning endpoints here.
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 '''
 
     output_path.write_text(service_content, encoding="utf-8")

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Environment Doctor - Diagnostic Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .summary-card .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .passed { color: #10b981; }
+        .warning { color: #f59e0b; }
+        .critical { color: #ef4444; }
+        table {
+            width: 100%;
+            background: white;
+            border-collapse: collapse;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        th {
+            background-color: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:hover {
+            background-color: #f9fafb;
+        }
+        .status-pass { color: #10b981; font-weight: 600; }
+        .status-fail { color: #ef4444; font-weight: 600; }
+        .status-warn { color: #f59e0b; font-weight: 600; }
+        .severity-critical { background-color: #fee2e2; }
+        .severity-warning { background-color: #fef3c7; }
+        .severity-info { background-color: #dbeafe; }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ML Environment Doctor</h1>
+        <p>Diagnostic Report - Generated on 2026-04-09 09:56:06</p>
+        <p style="font-size: 14px; opacity: 0.9;">Version 0.1.3</p>
+    </div>
+
+    <div class="summary">
+        <div class="summary-card">
+            <h3>Total Checks</h3>
+            <div class="value">15</div>
+        </div>
+        <div class="summary-card">
+            <h3>Passed</h3>
+            <div class="value passed">3</div>
+        </div>
+        <div class="summary-card">
+            <h3>Warnings</h3>
+            <div class="value warning">1</div>
+        </div>
+        <div class="summary-card">
+            <h3>Critical Issues</h3>
+            <div class="value critical">7</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Issue</th>
+                <th>Status</th>
+                <th>Severity</th>
+                <th>Category</th>
+                <th>Fix</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr class="severity-info">
+                <td><strong>Python Runtime</strong></td>
+                <td class="status-pass">PASS - 3.14.3</td>
+                <td>INFO</td>
+                <td>runtime</td>
+                <td>-</td>
+                <td>Minimum supported version is 3.8</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>NVIDIA GPU Driver</strong></td>
+                <td class="status-fail">FAIL - nvidia-smi not found</td>
+                <td>CRITICAL</td>
+                <td>gpu</td>
+                <td>Install NVIDIA drivers, then verify with: nvidia-smi</td>
+                <td>The NVIDIA CLI utility is missing from PATH</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>PyTorch Installation</strong></td>
+                <td class="status-fail">FAIL - Not installed</td>
+                <td>CRITICAL</td>
+                <td>pytorch</td>
+                <td>pip install torch --index-url https://download.pytorch.org/whl/cu124</td>
+                <td>PyTorch import failed</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>transformers</strong></td>
+                <td class="status-fail">FAIL - Not installed</td>
+                <td>CRITICAL</td>
+                <td>dependencies</td>
+                <td>pip install transformers&gt;=4.44.0</td>
+                <td>transformers is required for the recommended training stack</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>peft</strong></td>
+                <td class="status-fail">FAIL - Not installed</td>
+                <td>CRITICAL</td>
+                <td>dependencies</td>
+                <td>pip install peft&gt;=0.12.0</td>
+                <td>peft is required for the recommended training stack</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>trl</strong></td>
+                <td class="status-fail">FAIL - Not installed</td>
+                <td>CRITICAL</td>
+                <td>dependencies</td>
+                <td>pip install trl&gt;=0.9.0</td>
+                <td>trl is required for the recommended training stack</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>datasets</strong></td>
+                <td class="status-fail">FAIL - Not installed</td>
+                <td>CRITICAL</td>
+                <td>dependencies</td>
+                <td>pip install datasets&gt;=2.20.0</td>
+                <td>datasets is required for the recommended training stack</td>
+            </tr>
+
+            <tr class="severity-critical">
+                <td><strong>accelerate</strong></td>
+                <td class="status-fail">FAIL - Not installed</td>
+                <td>CRITICAL</td>
+                <td>dependencies</td>
+                <td>pip install accelerate&gt;=1.0.0</td>
+                <td>accelerate is required for the recommended training stack</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>TensorFlow</strong></td>
+                <td class="status-pass">INFO - Not installed</td>
+                <td>INFO</td>
+                <td>tensorflow</td>
+                <td>pip install tensorflow[and-cuda]</td>
+                <td>Optional unless you use TensorFlow/Keras workloads</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>Keras</strong></td>
+                <td class="status-pass">INFO - Not installed</td>
+                <td>INFO</td>
+                <td>tensorflow</td>
+                <td>pip install keras&gt;=3.0.0</td>
+                <td>Optional unless you use Keras directly</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>JAX</strong></td>
+                <td class="status-pass">INFO - Not installed</td>
+                <td>INFO</td>
+                <td>jax</td>
+                <td>pip install jax flax</td>
+                <td>Optional unless you use JAX/Flax workloads</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>Flax</strong></td>
+                <td class="status-pass">INFO - Not installed</td>
+                <td>INFO</td>
+                <td>jax</td>
+                <td>pip install flax</td>
+                <td>Install if you train JAX/Flax models</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>Disk Space</strong></td>
+                <td class="status-pass">PASS - 798.0GB free</td>
+                <td>INFO</td>
+                <td>system</td>
+                <td>-</td>
+                <td>Checked: /home/dhinakaran/.cache | Free: 797.98 GB</td>
+            </tr>
+
+            <tr class="severity-warning">
+                <td><strong>Docker GPU Support</strong></td>
+                <td class="status-fail">FAIL - GPU not accessible in Docker</td>
+                <td>WARNING</td>
+                <td>docker</td>
+                <td>Install nvidia-container-toolkit, then test: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi</td>
+                <td>docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: error running prestart hook #0: exit status 1, stdout: , stderr: Auto-detected mode as &#x27;legacy&#x27;
+nvidia-container-cli: initialization error: WSL environment detected but no adapters were found
+
+Run &#x27;docker run --help&#x27; for more information</td>
+            </tr>
+
+            <tr class="severity-info">
+                <td><strong>Internet Connectivity</strong></td>
+                <td class="status-pass">PASS - HF Hub accessible</td>
+                <td>INFO</td>
+                <td>network</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p>Generated by ML Environment Doctor | <a href="https://github.com/Dheena731/Ml-env-doctor">GitHub</a></p>
+    </div>
+</body>
+</html>

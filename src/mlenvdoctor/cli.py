@@ -10,7 +10,7 @@ import typer
 from typer.core import TyperArgument
 
 from . import __version__
-from .diagnose import diagnose_env, get_fix_commands, print_diagnostic_table
+from .diagnose import diagnose_env, get_fix_commands, print_diagnostic_table, summarize_for_doctor
 from .dockerize import generate_dockerfile, generate_service_template
 from .export import build_export_data, export_csv, export_html, export_json, get_exit_code
 from .fix import auto_fix, get_stack_requirements
@@ -62,6 +62,28 @@ app = typer.Typer(
 )
 mcp_app = typer.Typer(help="Minimal MCP server support.")
 stack_app = typer.Typer(help="Recommended dependency stacks.")
+
+
+def _print_doctor_summary(issues) -> None:
+    """Print prioritized, non-overlapping `doctor` output."""
+    findings = summarize_for_doctor(issues)
+    if not findings:
+        console.print(f"[bold green]{icon_check()} No actionable problems detected.[/bold green]")
+        console.print("[green]Your next step: proceed, or run `mlenvdoctor diagnose` for full evidence.[/green]")
+        return
+
+    console.print(f"[bold blue]{icon_search()} Doctor Summary[/bold blue]\n")
+    for index, finding in enumerate(findings, start=1):
+        severity_color = "red" if finding.severity == "critical" else "yellow"
+        console.print(f"[bold {severity_color}]{index}. Problem: {finding.problem}[/bold {severity_color}]")
+        console.print(f"Likely cause: {finding.likely_cause}")
+        console.print(f"Best next fix: {finding.best_fix}")
+        console.print("Verify:")
+        for step in finding.verify_steps:
+            console.print(f"  [cyan]{step}[/cyan]")
+        if finding.evidence:
+            console.print(f"Evidence: {finding.evidence[0]}")
+        console.print()
 
 
 def version_callback(value: bool):
@@ -126,10 +148,11 @@ def diagnose(
     ),
 ):
     f"""
-    {icon_search()} Diagnose your ML environment.
+    {icon_search()} Diagnose your environment with detailed evidence.
 
-    Quick scan: Checks CUDA, PyTorch, and required ML libraries.
-    Full scan (--full): Also checks GPU memory, disk space, Docker GPU support, and connectivity.
+    Use this command when you want the full list of checks, detailed findings,
+    and exportable report data. Full scan (--full) adds extended environment checks
+    and benchmark output.
     """
     json_to_stdout = json_output == "-"
     issues = diagnose_env(full=full, show_header=not json_to_stdout)
@@ -176,10 +199,14 @@ def doctor(
     ),
 ):
     f"""
-    {icon_search()} Run diagnostics with optional CI-friendly output.
+    {icon_search()} Triage the environment and recommend the best next fix.
+
+    Use this command for a compact, opinionated summary:
+    what failed, the likely cause, the best next step, and how to verify it.
     """
     issues = diagnose_env(full=full, show_header=not ci)
     exit_code = get_exit_code(issues)
+    findings = summarize_for_doctor(issues)
 
     if ci:
         payload = build_export_data(issues, include_metadata=True)
@@ -188,10 +215,14 @@ def doctor(
             f"mlenvdoctor status={exit_code} passed={summary['passed']} "
             f"warnings={summary['warnings']} critical={summary['critical']}"
         )
-        for fix in payload["fixes"]:
-            typer.echo(f"FIX {fix['issue']}: {fix['command']}")
+        for finding in findings:
+            verify = finding.verify_steps[0] if finding.verify_steps else "mlenvdoctor diagnose"
+            typer.echo(
+                f"ISSUE {finding.problem} | cause={finding.likely_cause} | "
+                f"fix={finding.best_fix} | verify={verify}"
+            )
     else:
-        print_diagnostic_table(issues)
+        _print_doctor_summary(issues)
 
     raise typer.Exit(exit_code)
 
@@ -241,7 +272,28 @@ def report(
 def fix(
     conda: bool = typer.Option(False, "--conda", "-c", help="Generate conda environment file"),
     venv: bool = typer.Option(False, "--venv", "-v", help="Create virtual environment"),
-    stack: str = typer.Option("trl-peft", "--stack", "-s", help="ML stack: trl-peft or minimal"),
+    stack: str = typer.Option(
+        "trl-peft",
+        "--stack",
+        "-s",
+        help="ML stack: trl-peft, minimal, or llm-training",
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Apply available automated actions and install requirements when applicable",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip confirmation prompts and proceed with the selected fix actions",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show the planned fix actions without writing files or installing packages",
+    ),
 ):
     f"""
     {icon_wrench()} Auto-fix environment issues and generate requirements.
@@ -249,11 +301,23 @@ def fix(
     Generates requirements.txt or conda environment file based on detected issues.
     Optionally creates a virtual environment and installs dependencies.
     """
-    success = auto_fix(use_conda=conda, create_venv=venv, stack=stack)
-    if success:
+    result = auto_fix(
+        use_conda=conda,
+        create_venv=venv,
+        stack=stack,
+        apply=apply,
+        yes=yes,
+        dry_run=dry_run,
+    )
+    if result.success:
         console.print()
         console.print(f"[bold green]{icon_check()} Auto-fix completed![/bold green]")
+        if result.created_paths:
+            for path in result.created_paths:
+                console.print(f"[cyan]Created: {path}[/cyan]")
         console.print("[yellow]Run 'mlenvdoctor diagnose' to verify fixes[/yellow]")
+    else:
+        raise typer.Exit(1)
 
 
 @stack_app.command("llm-training")
@@ -282,6 +346,21 @@ def dockerize(
     service: bool = typer.Option(
         False, "--service", "-s", help="Generate FastAPI service template"
     ),
+    stack: Optional[str] = typer.Option(
+        None,
+        "--stack",
+        help="Dependency stack to bake into the image (defaults to model-specific stack)",
+    ),
+    base_image: Optional[str] = typer.Option(
+        None,
+        "--base-image",
+        help="Override the CUDA base image used by the Dockerfile",
+    ),
+    python_version: str = typer.Option(
+        "3.10",
+        "--python-version",
+        help="Python version package to install in the container, e.g. 3.10",
+    ),
     output: str = typer.Option(
         "Dockerfile.mlenvdoctor", "--output", "-o", help="Output Dockerfile name"
     ),
@@ -294,10 +373,24 @@ def dockerize(
     """
     if service and model is None:
         # Generate service Dockerfile and template
-        generate_dockerfile(model_name=None, service=True, output_file=output)
+        generate_dockerfile(
+            model_name=None,
+            service=True,
+            output_file=output,
+            stack=stack,
+            base_image=base_image,
+            python_version=python_version,
+        )
         generate_service_template()
     else:
-        generate_dockerfile(model_name=model, service=service, output_file=output)
+        generate_dockerfile(
+            model_name=model,
+            service=service,
+            output_file=output,
+            stack=stack,
+            base_image=base_image,
+            python_version=python_version,
+        )
 
     console.print()
     console.print(f"[bold green]{icon_check()} Dockerfile generated![/bold green]")

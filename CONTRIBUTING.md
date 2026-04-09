@@ -55,6 +55,8 @@ mypy src/
 - Ensure all tests pass: `pytest`
 - Aim for good test coverage
 - Tests are in the `tests/` directory
+- Prefer Typer `CliRunner` for CLI behavior tests so they do not depend on the shell command being installed
+- Reserve subprocess-based tests for packaging or integration scenarios only
 
 ## Commit Messages
 
@@ -101,4 +103,3 @@ mlenvdoctor/
 Open an issue for questions or discussions. We're happy to help!
 
 Thank you for contributing! 🙏
-

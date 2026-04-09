@@ -7,6 +7,7 @@ from mlenvdoctor.diagnose import (
     check_tensorflow_keras,
     diagnose_env,
     get_fix_commands,
+    summarize_for_doctor,
 )
 from mlenvdoctor.parallel import run_parallel_with_results
 
@@ -80,12 +81,21 @@ def test_get_fix_commands_filters_actionable_issues():
             "severity": "critical",
             "status": "FAIL - bad",
             "command": "pip install a",
+            "check_id": "",
+            "category": "general",
         }
     ]
 
 
 def test_check_tensorflow_keras_installed(monkeypatch):
     """TensorFlow/Keras diagnostics should surface installed runtimes."""
+
+    class FakeTensor:
+        def __init__(self, value):
+            self._value = value
+
+        def numpy(self):
+            return self._value
 
     class FakeTF:
         __version__ = "2.16.1"
@@ -94,6 +104,15 @@ def test_check_tensorflow_keras_installed(monkeypatch):
             @staticmethod
             def list_physical_devices(kind: str):
                 return [object()] if kind == "GPU" else []
+
+        @staticmethod
+        def constant(value):
+            return value
+
+        @staticmethod
+        def matmul(a, b):
+            result = [[sum(a[0][i] * b[i][0] for i in range(len(b)))]]
+            return FakeTensor(result)
 
     class FakeKeras:
         __version__ = "3.2.0"
@@ -112,6 +131,7 @@ def test_check_tensorflow_keras_installed(monkeypatch):
 
     assert any(issue.name == "TensorFlow" and issue.status.startswith("PASS") for issue in issues)
     assert any(issue.name == "Keras" and issue.status.startswith("PASS") for issue in issues)
+    assert any(issue.name == "TensorFlow Execution" and issue.status.startswith("PASS") for issue in issues)
 
 
 def test_check_jax_flax_cpu_warning(monkeypatch):
@@ -122,6 +142,18 @@ def test_check_jax_flax_cpu_warning(monkeypatch):
 
     class FakeJax:
         __version__ = "0.4.30"
+
+        class numpy:
+            @staticmethod
+            def array(values):
+                class FakeArray:
+                    def __init__(self, items):
+                        self.items = items
+
+                    def sum(self):
+                        return sum(self.items)
+
+                return FakeArray(values)
 
         @staticmethod
         def devices():
@@ -148,3 +180,33 @@ def test_check_jax_flax_cpu_warning(monkeypatch):
 
     assert any(issue.name == "JAX" and issue.status.startswith("WARN") for issue in issues)
     assert any(issue.name == "Flax" and issue.status.startswith("PASS") for issue in issues)
+    assert any(issue.name == "JAX Execution" and issue.status.startswith("PASS") for issue in issues)
+
+
+def test_summarize_for_doctor_prioritizes_actionable_issues():
+    """Doctor summaries should include likely cause, fix, and verification."""
+    issues = [
+        DiagnosticIssue(
+            name="PyTorch CUDA",
+            status="FAIL - CUDA not available",
+            severity="critical",
+            fix="pip install torch",
+            check_id="pytorch_cuda",
+            category="pytorch",
+        ),
+        DiagnosticIssue(
+            name="transformers",
+            status="PASS - ok",
+            severity="info",
+            fix="",
+            check_id="library_transformers",
+            category="dependencies",
+        ),
+    ]
+
+    findings = summarize_for_doctor(issues)
+
+    assert len(findings) == 1
+    assert findings[0].problem == "PyTorch CUDA"
+    assert findings[0].best_fix == "pip install torch"
+    assert findings[0].verify_steps

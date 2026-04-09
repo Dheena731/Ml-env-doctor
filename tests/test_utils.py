@@ -69,6 +69,8 @@ def test_build_export_data_includes_exit_code():
 
     assert data["exit_code"] == 1
     assert data["summary"]["warnings"] == 1
+    assert data["issues"][0]["check_id"] == ""
+    assert data["issues"][0]["verify_steps"] == []
 
 
 def test_get_exit_code_prefers_critical_over_warning():

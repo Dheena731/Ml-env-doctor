@@ -1,0 +1,324 @@
+{
+  "issues": [
+    {
+      "name": "Python Runtime",
+      "status": "PASS - 3.14.3",
+      "severity": "info",
+      "fix": "",
+      "details": "Minimum supported version is 3.8",
+      "check_id": "python_runtime",
+      "category": "runtime",
+      "recommendation": "",
+      "confidence": "high",
+      "evidence": [
+        "sys.version_info=(3, 14, 3)"
+      ],
+      "metadata": {
+        "current_version": "3.14.3",
+        "minimum_version": "3.8"
+      }
+    },
+    {
+      "name": "NVIDIA GPU Driver",
+      "status": "FAIL - nvidia-smi not found",
+      "severity": "critical",
+      "fix": "Install NVIDIA drivers, then verify with: nvidia-smi",
+      "details": "The NVIDIA CLI utility is missing from PATH",
+      "check_id": "cuda_driver",
+      "category": "gpu",
+      "recommendation": "Install NVIDIA drivers, then verify with: nvidia-smi",
+      "confidence": "high",
+      "evidence": [
+        "nvidia-smi missing from PATH"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "PyTorch Installation",
+      "status": "FAIL - Not installed",
+      "severity": "critical",
+      "fix": "pip install torch --index-url https://download.pytorch.org/whl/cu124",
+      "details": "PyTorch import failed",
+      "check_id": "pytorch_installation",
+      "category": "pytorch",
+      "recommendation": "pip install torch --index-url https://download.pytorch.org/whl/cu124",
+      "confidence": "high",
+      "evidence": [
+        "import torch failed"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "transformers",
+      "status": "FAIL - Not installed",
+      "severity": "critical",
+      "fix": "pip install transformers>=4.44.0",
+      "details": "transformers is required for the recommended training stack",
+      "check_id": "library_transformers",
+      "category": "dependencies",
+      "recommendation": "pip install transformers>=4.44.0",
+      "confidence": "high",
+      "evidence": [
+        "import transformers failed"
+      ],
+      "metadata": {
+        "minimum_version": "4.44.0"
+      }
+    },
+    {
+      "name": "peft",
+      "status": "FAIL - Not installed",
+      "severity": "critical",
+      "fix": "pip install peft>=0.12.0",
+      "details": "peft is required for the recommended training stack",
+      "check_id": "library_peft",
+      "category": "dependencies",
+      "recommendation": "pip install peft>=0.12.0",
+      "confidence": "high",
+      "evidence": [
+        "import peft failed"
+      ],
+      "metadata": {
+        "minimum_version": "0.12.0"
+      }
+    },
+    {
+      "name": "trl",
+      "status": "FAIL - Not installed",
+      "severity": "critical",
+      "fix": "pip install trl>=0.9.0",
+      "details": "trl is required for the recommended training stack",
+      "check_id": "library_trl",
+      "category": "dependencies",
+      "recommendation": "pip install trl>=0.9.0",
+      "confidence": "high",
+      "evidence": [
+        "import trl failed"
+      ],
+      "metadata": {
+        "minimum_version": "0.9.0"
+      }
+    },
+    {
+      "name": "datasets",
+      "status": "FAIL - Not installed",
+      "severity": "critical",
+      "fix": "pip install datasets>=2.20.0",
+      "details": "datasets is required for the recommended training stack",
+      "check_id": "library_datasets",
+      "category": "dependencies",
+      "recommendation": "pip install datasets>=2.20.0",
+      "confidence": "high",
+      "evidence": [
+        "import datasets failed"
+      ],
+      "metadata": {
+        "minimum_version": "2.20.0"
+      }
+    },
+    {
+      "name": "accelerate",
+      "status": "FAIL - Not installed",
+      "severity": "critical",
+      "fix": "pip install accelerate>=1.0.0",
+      "details": "accelerate is required for the recommended training stack",
+      "check_id": "library_accelerate",
+      "category": "dependencies",
+      "recommendation": "pip install accelerate>=1.0.0",
+      "confidence": "high",
+      "evidence": [
+        "import accelerate failed"
+      ],
+      "metadata": {
+        "minimum_version": "1.0.0"
+      }
+    },
+    {
+      "name": "TensorFlow",
+      "status": "INFO - Not installed",
+      "severity": "info",
+      "fix": "pip install tensorflow[and-cuda]",
+      "details": "Optional unless you use TensorFlow/Keras workloads",
+      "check_id": "tensorflow_runtime",
+      "category": "tensorflow",
+      "recommendation": "pip install tensorflow[and-cuda]",
+      "confidence": "high",
+      "evidence": [
+        "import tensorflow failed"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "Keras",
+      "status": "INFO - Not installed",
+      "severity": "info",
+      "fix": "pip install keras>=3.0.0",
+      "details": "Optional unless you use Keras directly",
+      "check_id": "keras_version",
+      "category": "tensorflow",
+      "recommendation": "pip install keras>=3.0.0",
+      "confidence": "high",
+      "evidence": [
+        "import keras failed"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "JAX",
+      "status": "INFO - Not installed",
+      "severity": "info",
+      "fix": "pip install jax flax",
+      "details": "Optional unless you use JAX/Flax workloads",
+      "check_id": "jax_runtime",
+      "category": "jax",
+      "recommendation": "pip install jax flax",
+      "confidence": "high",
+      "evidence": [
+        "import jax failed"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "Flax",
+      "status": "INFO - Not installed",
+      "severity": "info",
+      "fix": "pip install flax",
+      "details": "Install if you train JAX/Flax models",
+      "check_id": "flax_runtime",
+      "category": "jax",
+      "recommendation": "pip install flax",
+      "confidence": "high",
+      "evidence": [
+        "import flax failed"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "Disk Space",
+      "status": "PASS - 798.0GB free",
+      "severity": "info",
+      "fix": "",
+      "details": "Checked: /home/dhinakaran/.cache | Free: 797.98 GB",
+      "check_id": "disk_space",
+      "category": "system",
+      "recommendation": "",
+      "confidence": "high",
+      "evidence": [
+        "cache_root=/home/dhinakaran/.cache",
+        "free_gb=797.98"
+      ],
+      "metadata": {
+        "free_gb": 797.98,
+        "cache_root": "/home/dhinakaran/.cache"
+      }
+    },
+    {
+      "name": "Docker GPU Support",
+      "status": "FAIL - GPU not accessible in Docker",
+      "severity": "warning",
+      "fix": "Install nvidia-container-toolkit, then test: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi",
+      "details": "docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: error running prestart hook #0: exit status 1, stdout: , stderr: Auto-detected mode as 'legacy'\nnvidia-container-cli: initialization error: WSL environment detected but no adapters were found\n\nRun 'docker run --help' for more information",
+      "check_id": "docker_gpu",
+      "category": "docker",
+      "recommendation": "Install nvidia-container-toolkit, then test: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi",
+      "confidence": "high",
+      "evidence": [
+        "docker run returncode=125"
+      ],
+      "metadata": {}
+    },
+    {
+      "name": "Internet Connectivity",
+      "status": "PASS - HF Hub accessible",
+      "severity": "info",
+      "fix": "",
+      "details": null,
+      "check_id": "internet_connectivity",
+      "category": "network",
+      "recommendation": "",
+      "confidence": "high",
+      "evidence": [
+        "https://huggingface.co reachable"
+      ],
+      "metadata": {}
+    }
+  ],
+  "summary": {
+    "total": 15,
+    "passed": 3,
+    "warnings": 1,
+    "critical": 7
+  },
+  "exit_code": 2,
+  "fixes": [
+    {
+      "issue": "NVIDIA GPU Driver",
+      "severity": "critical",
+      "status": "FAIL - nvidia-smi not found",
+      "command": "Install NVIDIA drivers, then verify with: nvidia-smi",
+      "check_id": "cuda_driver",
+      "category": "gpu"
+    },
+    {
+      "issue": "PyTorch Installation",
+      "severity": "critical",
+      "status": "FAIL - Not installed",
+      "command": "pip install torch --index-url https://download.pytorch.org/whl/cu124",
+      "check_id": "pytorch_installation",
+      "category": "pytorch"
+    },
+    {
+      "issue": "transformers",
+      "severity": "critical",
+      "status": "FAIL - Not installed",
+      "command": "pip install transformers>=4.44.0",
+      "check_id": "library_transformers",
+      "category": "dependencies"
+    },
+    {
+      "issue": "peft",
+      "severity": "critical",
+      "status": "FAIL - Not installed",
+      "command": "pip install peft>=0.12.0",
+      "check_id": "library_peft",
+      "category": "dependencies"
+    },
+    {
+      "issue": "trl",
+      "severity": "critical",
+      "status": "FAIL - Not installed",
+      "command": "pip install trl>=0.9.0",
+      "check_id": "library_trl",
+      "category": "dependencies"
+    },
+    {
+      "issue": "datasets",
+      "severity": "critical",
+      "status": "FAIL - Not installed",
+      "command": "pip install datasets>=2.20.0",
+      "check_id": "library_datasets",
+      "category": "dependencies"
+    },
+    {
+      "issue": "accelerate",
+      "severity": "critical",
+      "status": "FAIL - Not installed",
+      "command": "pip install accelerate>=1.0.0",
+      "check_id": "library_accelerate",
+      "category": "dependencies"
+    },
+    {
+      "issue": "Docker GPU Support",
+      "severity": "warning",
+      "status": "FAIL - GPU not accessible in Docker",
+      "command": "Install nvidia-container-toolkit, then test: docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi",
+      "check_id": "docker_gpu",
+      "category": "docker"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.3",
+    "timestamp": "2026-04-09T09:56:06.546847",
+    "tool": "mlenvdoctor"
+  }
+}

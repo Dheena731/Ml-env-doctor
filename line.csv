@@ -1,0 +1,13 @@
+Issue,Status,Severity,Category,Check ID,Fix,Details,Confidence
+Python Runtime,PASS - 3.14.3,info,runtime,python_runtime,,Minimum supported version is 3.8,high
+NVIDIA GPU Driver,FAIL - nvidia-smi not found,critical,gpu,cuda_driver,"Install NVIDIA drivers, then verify with: nvidia-smi",The NVIDIA CLI utility is missing from PATH,high
+PyTorch Installation,FAIL - Not installed,critical,pytorch,pytorch_installation,pip install torch --index-url https://download.pytorch.org/whl/cu124,PyTorch import failed,high
+transformers,FAIL - Not installed,critical,dependencies,library_transformers,pip install transformers>=4.44.0,transformers is required for the recommended training stack,high
+peft,FAIL - Not installed,critical,dependencies,library_peft,pip install peft>=0.12.0,peft is required for the recommended training stack,high
+trl,FAIL - Not installed,critical,dependencies,library_trl,pip install trl>=0.9.0,trl is required for the recommended training stack,high
+datasets,FAIL - Not installed,critical,dependencies,library_datasets,pip install datasets>=2.20.0,datasets is required for the recommended training stack,high
+accelerate,FAIL - Not installed,critical,dependencies,library_accelerate,pip install accelerate>=1.0.0,accelerate is required for the recommended training stack,high
+TensorFlow,INFO - Not installed,info,tensorflow,tensorflow_runtime,pip install tensorflow[and-cuda],Optional unless you use TensorFlow/Keras workloads,high
+Keras,INFO - Not installed,info,tensorflow,keras_version,pip install keras>=3.0.0,Optional unless you use Keras directly,high
+JAX,INFO - Not installed,info,jax,jax_runtime,pip install jax flax,Optional unless you use JAX/Flax workloads,high
+Flax,INFO - Not installed,info,jax,flax_runtime,pip install flax,Install if you train JAX/Flax models,high

@@ -1,235 +1,192 @@
 """Tests for CLI commands."""
 
 import json
-import subprocess
 from pathlib import Path
 
-import pytest
+from typer.testing import CliRunner
+
+from mlenvdoctor.cli import app
+from mlenvdoctor.diagnose import DiagnosticIssue
+
+runner = CliRunner()
+
+
+def _sample_issues() -> list[DiagnosticIssue]:
+    return [
+        DiagnosticIssue(
+            name="PyTorch CUDA",
+            status="FAIL - CUDA not available",
+            severity="critical",
+            fix="pip install torch --index-url https://download.pytorch.org/whl/cu124",
+            check_id="pytorch_cuda",
+            category="pytorch",
+        ),
+        DiagnosticIssue(
+            name="transformers",
+            status="PASS - 4.44.0",
+            severity="info",
+            fix="",
+            check_id="library_transformers",
+            category="dependencies",
+        ),
+    ]
 
 
 def test_version_command():
     """Test --version flag."""
-    result = subprocess.run(
-        ["mlenvdoctor", "--version"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 0
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
     assert "ML Environment Doctor" in result.stdout
     assert "version" in result.stdout.lower()
 
 
-def test_diagnose_basic():
+def test_diagnose_basic(monkeypatch):
     """Test basic diagnose command."""
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    # Should not crash, even if there are issues
-    assert result.returncode in (0, 1, 2)
-    assert "Running ML Environment Diagnostics" in result.stdout or "diagnose" in result.stderr.lower()
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    result = runner.invoke(app, ["diagnose"])
+    assert result.exit_code == 2
+    assert "Diagnostic Results" in result.stdout
 
 
-def test_diagnose_full():
+def test_diagnose_full(monkeypatch):
     """Test full diagnose command."""
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--full"],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    # Should not crash
-    assert result.returncode in (0, 1, 2)
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    monkeypatch.setattr("mlenvdoctor.cli.benchmark_gpu_ops", lambda: {"matmul_1024x1024": 1.2})
+    result = runner.invoke(app, ["diagnose", "--full"])
+    assert result.exit_code == 2
+    assert "GPU benchmark results" in result.stdout
 
 
-def test_diagnose_json_stdout():
+def test_diagnose_json_stdout(monkeypatch):
     """JSON stdout mode should return parseable machine-readable output."""
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--json", "-"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    assert result.returncode in (0, 1, 2)
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    result = runner.invoke(app, ["diagnose", "--json", "-"])
+    assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert "issues" in payload
-    assert "exit_code" in payload
+    assert payload["issues"][0]["check_id"] == "pytorch_cuda"
 
 
-def test_json_export(tmp_path: Path):
+def test_json_export(monkeypatch, tmp_path: Path):
     """Test JSON export functionality."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     output_file = tmp_path / "test_results.json"
-
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--json", str(output_file)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    if result.returncode == 0:
-        assert output_file.exists(), "JSON file should be created"
-        data = json.loads(output_file.read_text())
-        assert "issues" in data, "JSON should contain 'issues'"
-        assert "summary" in data, "JSON should contain 'summary'"
-        assert isinstance(data["issues"], list), "Issues should be a list"
+    result = runner.invoke(app, ["diagnose", "--json", str(output_file)])
+    assert result.exit_code == 2
+    assert output_file.exists()
+    data = json.loads(output_file.read_text())
+    assert "issues" in data
+    assert "summary" in data
 
 
-def test_csv_export(tmp_path: Path):
+def test_csv_export(monkeypatch, tmp_path: Path):
     """Test CSV export functionality."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     output_file = tmp_path / "test_results.csv"
-
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--csv", str(output_file)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    if result.returncode == 0:
-        assert output_file.exists(), "CSV file should be created"
-        content = output_file.read_text()
-        assert "Issue" in content, "CSV should contain headers"
-        assert "Status" in content, "CSV should contain Status column"
+    result = runner.invoke(app, ["diagnose", "--csv", str(output_file)])
+    assert result.exit_code == 2
+    content = output_file.read_text()
+    assert "Category" in content
+    assert "Check ID" in content
 
 
-def test_html_export(tmp_path: Path):
+def test_html_export(monkeypatch, tmp_path: Path):
     """Test HTML export functionality."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     output_file = tmp_path / "test_report.html"
-
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--html", str(output_file)],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    if result.returncode == 0:
-        assert output_file.exists(), "HTML file should be created"
-        content = output_file.read_text()
-        assert "<html" in content.lower(), "Should be valid HTML"
-        assert "ML Environment Doctor" in content, "Should contain title"
+    result = runner.invoke(app, ["diagnose", "--html", str(output_file)])
+    assert result.exit_code == 2
+    content = output_file.read_text()
+    assert "<html" in content.lower()
+    assert "ML Environment Doctor" in content
 
 
 def test_logging(tmp_path: Path):
     """Test logging functionality."""
     log_file = tmp_path / "test.log"
-
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--log-file", str(log_file), "--log-level", "INFO"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    # Log file might be created even if command fails
-    if log_file.exists():
-        content = log_file.read_text()
-        # Just check it's not empty
-        assert len(content) >= 0
+    result = runner.invoke(app, ["--log-file", str(log_file), "--log-level", "INFO", "diagnose", "--json", "-"])
+    assert result.exit_code in {0, 1, 2}
+    assert log_file.exists()
 
 
-def test_multiple_exports(tmp_path: Path):
+def test_multiple_exports(monkeypatch, tmp_path: Path):
     """Test multiple export formats simultaneously."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     json_file = tmp_path / "multi.json"
     csv_file = tmp_path / "multi.csv"
     html_file = tmp_path / "multi.html"
-
-    result = subprocess.run(
-        [
-            "mlenvdoctor",
-            "diagnose",
-            "--json",
-            str(json_file),
-            "--csv",
-            str(csv_file),
-            "--html",
-            str(html_file),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
+    result = runner.invoke(
+        app,
+        ["diagnose", "--json", str(json_file), "--csv", str(csv_file), "--html", str(html_file)],
     )
-
-    if result.returncode == 0:
-        # All files should be created
-        assert json_file.exists() or csv_file.exists() or html_file.exists(), "At least one export should work"
+    assert result.exit_code == 2
+    assert json_file.exists()
+    assert csv_file.exists()
+    assert html_file.exists()
 
 
 def test_fix_command():
     """Test fix command."""
-    result = subprocess.run(
-        ["mlenvdoctor", "fix", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 0
-    assert "fix" in result.stdout.lower() or "auto-fix" in result.stdout.lower()
+    result = runner.invoke(app, ["fix", "--help"])
+    assert result.exit_code == 0
+    assert "auto-fix" in result.stdout.lower()
+
+
+def test_fix_dry_run(monkeypatch):
+    """Dry-run fix mode should not prompt."""
+    class Result:
+        success = True
+        created_paths = []
+
+    monkeypatch.setattr("mlenvdoctor.cli.auto_fix", lambda **kwargs: Result())
+    result = runner.invoke(app, ["fix", "--dry-run"])
+    assert result.exit_code == 0
 
 
 def test_dockerize_command():
     """Test dockerize command."""
-    result = subprocess.run(
-        ["mlenvdoctor", "dockerize", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 0
+    result = runner.invoke(app, ["dockerize", "--help"])
+    assert result.exit_code == 0
     assert "docker" in result.stdout.lower()
 
 
-def test_doctor_command():
-    """Test doctor command help."""
-    result = subprocess.run(
-        ["mlenvdoctor", "doctor", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 0
-    assert "ci" in result.stdout.lower()
+def test_doctor_command(monkeypatch):
+    """Test doctor command output."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    result = runner.invoke(app, ["doctor", "--ci"])
+    assert result.exit_code == 2
+    assert "mlenvdoctor status=2" in result.stdout
+    assert "ISSUE PyTorch CUDA" in result.stdout
+
+
+def test_doctor_human_output_is_summary_not_table(monkeypatch):
+    """Doctor should print a triage summary rather than the diagnose table."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 2
+    assert "Problem: PyTorch CUDA" in result.stdout
+    assert "Likely cause:" in result.stdout
+    assert "Verify:" in result.stdout
+    assert "Diagnostic Results" not in result.stdout
 
 
 def test_stack_command():
     """Test stack command help."""
-    result = subprocess.run(
-        ["mlenvdoctor", "stack", "llm-training", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 0
+    result = runner.invoke(app, ["stack", "llm-training", "--help"])
+    assert result.exit_code == 0
     assert "llm-training" in result.stdout.lower() or "output" in result.stdout.lower()
 
 
 def test_invalid_log_level():
     """Test that invalid log level is rejected."""
-    result = subprocess.run(
-        ["mlenvdoctor", "diagnose", "--log-level", "INVALID"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    # Should fail or show error
-    assert result.returncode != 0 or "invalid" in result.stderr.lower() or "error" in result.stderr.lower()
+    result = runner.invoke(app, ["--log-level", "INVALID", "diagnose"])
+    assert result.exit_code != 0
+    assert "Invalid log level" in result.stdout or "Invalid value" in result.stdout
 
 
 def test_help_survives_log_file_permission_issue(tmp_path: Path):
     """Help output should still work if the log path cannot be opened."""
     blocked_path = tmp_path
-
-    result = subprocess.run(
-        ["mlenvdoctor", "--log-file", str(blocked_path), "fix", "--help"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-
-    assert result.returncode == 0
+    result = runner.invoke(app, ["--log-file", str(blocked_path), "fix", "--help"])
+    assert result.exit_code == 0
     assert "fix" in result.stdout.lower()

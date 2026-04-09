@@ -3,182 +3,159 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)](https://pypi.org/project/mlenvdoctor/)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/mlenvdoctor?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/mlenvdoctor)
-[![Repository](https://img.shields.io/badge/GitHub-Ml--env--doctor-black?logo=github)](https://github.com/Dheena731/Ml-env-doctor)
 
-> Single command fixes many "why is my ML environment broken?" problems.
+> Diagnose ML environment issues, export shareable reports, and generate safe starting fixes.
 
-ML Environment Doctor is a Python CLI for diagnosing and repairing ML environments. It checks CUDA, PyTorch, TensorFlow/Keras, and JAX/Flax readiness, generates shareable reports, emits CI-friendly exit codes, and creates Dockerfile templates for training workflows.
+ML Environment Doctor is a Python CLI for inspecting machine learning environments used for local development, CI jobs, and GPU containers. It focuses on practical readiness checks for PyTorch, TensorFlow/Keras, and JAX/Flax workflows, then turns those results into readable reports and automatable outputs.
 
-- Repository: `https://github.com/Dheena731/Ml-env-doctor`
-- PyPI: `https://pypi.org/project/mlenvdoctor/`
+Repository: `https://github.com/Dheena731/Ml-env-doctor`
 
-## Why ML Environment Doctor?
+## What It Does Today
 
-**Problem**: ML environment setup is fragmented across forum answers, conflicting CUDA wheels, and half-working virtual environments.
+- Diagnoses Python runtime compatibility
+- Checks NVIDIA driver visibility with `nvidia-smi`
+- Validates PyTorch version, CUDA visibility, and a basic CUDA tensor execution path
+- Validates TensorFlow import, GPU enumeration, and a small tensor execution path
+- Validates JAX backend visibility, Flax presence, and a small JAX array execution path
+- Checks common ML training libraries like `transformers`, `peft`, `trl`, `datasets`, and `accelerate`
+- Optionally checks GPU memory, disk space, Docker GPU support, and Hugging Face connectivity
+- Exports JSON, CSV, and HTML reports
+- Generates requirements files, Conda environment files, and Dockerfiles
+- Provides a safe fix workflow with planning, dry-run, apply, and verification modes
 
-**Solution**: one CLI that:
+## What It Does Not Claim Yet
 
-- Diagnoses CUDA, Python, and ML framework issues quickly
-- Suggests copy-paste fixes for common failures
-- Emits machine-readable JSON and stable exit codes for CI
-- Saves HTML and JSON reports for teammates
-- Generates recommended dependency stacks for LLM training
+- It does not fully repair every environment problem automatically
+- It does not maintain a large model registry
+- It does not replace framework-native setup guides for CUDA, cuDNN, or TPU drivers
+- Its Docker generation is configurable, but still template-based rather than a full build system
 
 ## Quick Start
 
 ```bash
-# Install
 pip install mlenvdoctor
 
-# Human-readable diagnosis
 mlenvdoctor diagnose
-
-# Full scan
 mlenvdoctor diagnose --full
-
-# JSON to stdout for CI/parsers
-mlenvdoctor diagnose --json -
-
-# CI-friendly compact summary
-mlenvdoctor doctor --ci
-
-# Save a shareable report bundle
-mlenvdoctor report
-
-# Generate a recommended LLM training requirements file
-mlenvdoctor stack llm-training -o requirements-llm-training.txt
-```
-
-## 30-Second Quickstart
-
-```bash
-pip install mlenvdoctor
-mlenvdoctor diagnose
 mlenvdoctor diagnose --json -
 mlenvdoctor report
+mlenvdoctor fix --dry-run
+mlenvdoctor fix --apply --yes
+mlenvdoctor dockerize tinyllama --stack minimal
 ```
 
-If you are debugging a teammate's machine or a CI runner, start with `mlenvdoctor report` and share the generated JSON/HTML pair.
-
-## Features
-
-### Diagnosis
-
-- CUDA driver and GPU visibility checks
-- PyTorch CUDA availability and version checks
-- TensorFlow runtime and Keras 3 readiness checks
-- JAX backend and Flax installation checks
-- GPU memory warnings
-- Disk space checks for model cache usage
-- Docker GPU support detection
-- Hugging Face connectivity checks
-
-### Machine-Readable Output
-
-- `mlenvdoctor diagnose --json -` prints JSON to stdout
-- Exit codes are stable for automation:
-  - `0`: healthy
-  - `1`: warnings present
-  - `2`: critical issues present
-
-### Reports
-
-- `mlenvdoctor report` saves timestamped JSON and HTML reports
-- Output can be attached to CI jobs or shared with teammates
-
-### Fixes
-
-- Failures include copy-paste fix commands where possible
-- `mlenvdoctor fix` can generate `requirements.txt` or Conda environment files
-- `mlenvdoctor fix --venv` can create and use a virtual environment
-
-### Stacks
-
-- `mlenvdoctor stack llm-training` prints a recommended dependency stack for fine-tuning
-- `mlenvdoctor fix --stack llm-training` uses that stack for generated requirements
-
-### MCP
-
-- `mlenvdoctor mcp serve` exposes a minimal JSON-line MCP stub
-- Current stub tools:
-  - `diagnose`
-  - `get_fixes`
-
-## Examples
+## Main Commands
 
 ### Diagnose
 
+Detailed evidence and export command.
+
 ```bash
 mlenvdoctor diagnose
 mlenvdoctor diagnose --full
+mlenvdoctor diagnose --json diagnostics.json
 mlenvdoctor diagnose --json -
+mlenvdoctor diagnose --csv diagnostics.csv --html diagnostics.html
 ```
 
-### CI
+`diagnose` returns stable exit codes:
+
+- `0`: no warnings or critical issues
+- `1`: warnings present
+- `2`: critical issues present
+
+### Doctor
+
+Action-oriented triage command. It is intentionally different from `diagnose`:
+
+- `doctor` tells you what failed, the likely cause, the best next fix, and how to verify it
+- `diagnose` shows the full evidence and supports exports
+
+Compact CI-friendly output:
 
 ```bash
 mlenvdoctor doctor --ci
 mlenvdoctor doctor --ci --full
 ```
 
-### Reports
+### Report
+
+Save a shareable JSON and HTML bundle:
 
 ```bash
 mlenvdoctor report
 mlenvdoctor report --quick --output-dir artifacts/mlenvdoctor
 ```
 
-### Stacks
+### Fix
+
+The fix workflow is intentionally explicit:
+
+```bash
+mlenvdoctor fix --dry-run
+mlenvdoctor fix --apply
+mlenvdoctor fix --apply --yes
+mlenvdoctor fix --venv --apply --yes
+mlenvdoctor fix --conda
+mlenvdoctor fix --stack llm-training --dry-run
+```
+
+Current fix behavior:
+
+- Plans file-generation and environment actions from detected issues
+- Supports dry-run mode before changes
+- Can create a virtual environment
+- Can generate either `requirements-mlenvdoctor.txt` or `environment-mlenvdoctor.yml`
+- Can install requirements when `--apply` is used
+- Re-runs diagnostics for verification after a successful apply
+
+### Stack
 
 ```bash
 mlenvdoctor stack llm-training
-mlenvdoctor stack llm-training -o requirements-llm-training.txt
-```
-
-### Auto-Fix
-
-```bash
-mlenvdoctor fix
-mlenvdoctor fix --conda
-mlenvdoctor fix --venv
-mlenvdoctor fix --stack llm-training
+mlenvdoctor stack llm-training --output requirements-llm-training.txt
 ```
 
 ### Dockerize
 
 ```bash
-mlenvdoctor dockerize mistral-7b
-mlenvdoctor dockerize --service
+mlenvdoctor dockerize tinyllama
+mlenvdoctor dockerize mistral-7b --stack llm-training
+mlenvdoctor dockerize --service --base-image nvidia/cuda:12.4.0-runtime-ubuntu22.04
+mlenvdoctor dockerize gpt2 --python-version 3.10 -o Dockerfile.gpt2
 ```
 
-## Troubleshooting Examples
+Current Docker generation supports:
+
+- model-aware defaults for `tinyllama`, `gpt2`, and `mistral-7b`
+- stack selection
+- base image override
+- Python version selection
+- training and FastAPI service profiles
+
+### MCP
 
 ```bash
-# Your CI job wants JSON
-mlenvdoctor diagnose --json -
-
-# Your team wants a report bundle
-mlenvdoctor report --output-dir artifacts/mlenvdoctor
-
-# Your pipeline wants a one-line summary plus fix hints
-mlenvdoctor doctor --ci
-
-# You want a starting dependency set for fine-tuning
-mlenvdoctor stack llm-training -o requirements-llm-training.txt
+mlenvdoctor mcp serve
 ```
 
-## Installation
+This is currently a small JSON-lines stub with:
 
-```bash
-# From PyPI
-pip install mlenvdoctor
+- `diagnose`
+- `get_fixes`
 
-# From source
-git clone https://github.com/Dheena731/Ml-env-doctor.git
-cd Ml-env-doctor
-pip install -e .
-```
+## Output Schema
+
+JSON exports include:
+
+- issue name, status, severity, and fix command
+- check ID and category
+- recommendation, likely cause, and verify steps
+- confidence
+- evidence and metadata blocks
+- summary counts and exit code
+
+That makes the tool more useful for CI parsing, dashboards, and future integrations.
 
 ## Development
 
@@ -192,15 +169,23 @@ black src/ tests/
 mypy src/
 ```
 
-## Repository
+## Test Strategy
 
-- GitHub: [Dheena731/Ml-env-doctor](https://github.com/Dheena731/Ml-env-doctor)
-- Issues: [Open an issue](https://github.com/Dheena731/Ml-env-doctor/issues)
-- Clone URL: `https://github.com/Dheena731/Ml-env-doctor.git`
+The repository uses two test layers:
 
-## Contributing
+- direct Python and Typer `CliRunner` tests for most command behavior
+- a smaller set of module-level tests for exports, validators, diagnostics, and file generation
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+This keeps the main test suite independent from whether `mlenvdoctor` was installed as a shell command in the current environment.
+
+## Repository Notes
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) covers local setup and contribution flow
+- [IMPROVEMENTS.md](IMPROVEMENTS.md) tracks active improvement themes
+- [IMPROVEMENTS_ROADMAP.md](IMPROVEMENTS_ROADMAP.md) outlines future milestones
+- [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) explains the current project architecture and product shape
+- [docs/KILLER_PRODUCT_PLAN.md](docs/KILLER_PRODUCT_PLAN.md) is the strategic roadmap for turning the project into a category-leading product
+- [docker/README.md](docker/README.md) documents Docker-specific workflows
 
 ## License
 

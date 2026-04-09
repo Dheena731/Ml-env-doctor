@@ -17,6 +17,14 @@ def issue_to_dict(issue: DiagnosticIssue) -> Dict[str, Any]:
         "severity": issue.severity,
         "fix": issue.fix,
         "details": issue.details,
+        "check_id": issue.check_id,
+        "category": issue.category,
+        "recommendation": issue.recommendation,
+        "likely_cause": issue.likely_cause,
+        "verify_steps": issue.verify_steps,
+        "confidence": issue.confidence,
+        "evidence": issue.evidence,
+        "metadata": issue.metadata,
     }
 
 
@@ -112,7 +120,18 @@ def export_csv(issues: List[DiagnosticIssue], output_file: Optional[Path] = None
 
     with output_file.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["Issue", "Status", "Severity", "Fix", "Details"])
+        writer.writerow(
+            [
+                "Issue",
+                "Status",
+                "Severity",
+                "Category",
+                "Check ID",
+                "Fix",
+                "Details",
+                "Confidence",
+            ]
+        )
 
         for issue in issues:
             writer.writerow(
@@ -120,8 +139,11 @@ def export_csv(issues: List[DiagnosticIssue], output_file: Optional[Path] = None
                     issue.name,
                     issue.status,
                     issue.severity,
+                    issue.category,
+                    issue.check_id,
                     issue.fix,
                     issue.details or "",
+                    issue.confidence,
                 ]
             )
 
@@ -259,6 +281,7 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
                 <th>Issue</th>
                 <th>Status</th>
                 <th>Severity</th>
+                <th>Category</th>
                 <th>Fix</th>
                 <th>Details</th>
             </tr>
@@ -280,6 +303,7 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
                 <td><strong>{html.escape(issue.name)}</strong></td>
                 <td class="{status_class}">{html.escape(issue.status)}</td>
                 <td>{html.escape(issue.severity.upper())}</td>
+                <td>{html.escape(issue.category or '-')}</td>
                 <td>{html.escape(issue.fix or '-')}</td>
                 <td>{html.escape(issue.details or '-')}</td>
             </tr>

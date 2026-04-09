@@ -1,10 +1,15 @@
 """Auto-fix and requirements generation for ML Environment Doctor."""
 
-import sys
-from pathlib import Path
-from typing import Optional
+from __future__ import annotations
 
-from .diagnose import diagnose_env
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Optional
+
+from .config import load_config
+from .constants import DEFAULT_REQUIREMENTS_FILE
+from .diagnose import DiagnosticIssue, diagnose_env
 from .icons import icon_wrench
 from .utils import (
     check_command_exists,
@@ -48,6 +53,29 @@ ML_STACKS = {
 }
 
 
+@dataclass
+class FixAction:
+    """A validated action the fix engine can perform."""
+
+    kind: str
+    description: str
+    command: Optional[List[str]] = None
+    output_path: Optional[Path] = None
+    details: str = ""
+
+
+@dataclass
+class FixResult:
+    """Structured result for a fix run."""
+
+    success: bool
+    actions: List[FixAction] = field(default_factory=list)
+    executed_actions: List[str] = field(default_factory=list)
+    verification_issues: List[DiagnosticIssue] = field(default_factory=list)
+    created_paths: List[Path] = field(default_factory=list)
+    message: str = ""
+
+
 def get_stack_requirements(stack: str) -> list[str]:
     """Return the requirement list for a named stack."""
     if stack not in ML_STACKS:
@@ -57,9 +85,9 @@ def get_stack_requirements(stack: str) -> list[str]:
 
 
 def generate_requirements_txt(
-    stack: str = "trl-peft", output_file: str = "requirements-mlenvdoctor.txt"
+    stack: str = "trl-peft", output_file: str = DEFAULT_REQUIREMENTS_FILE
 ) -> Path:
-    """Generate requirements.txt file."""
+    """Generate a requirements.txt file for a named stack."""
     requirements = get_stack_requirements(stack)
     output_path = Path(output_file)
 
@@ -67,18 +95,17 @@ def generate_requirements_txt(
         import torch
 
         if torch.cuda.is_available():
-            content = "# PyTorch with CUDA 12.4\n"
+            content = "# Install CUDA-enabled PyTorch first if needed\n"
             content += (
-                "# Install with: pip install torch --index-url "
-                "https://download.pytorch.org/whl/cu124\n"
+                "# pip install torch --index-url "
+                "https://download.pytorch.org/whl/cu124\n\n"
             )
-            content += f"# Then: pip install -r {output_path.name}\n\n"
         else:
-            content = "# Standard PyTorch (CPU or CUDA)\n\n"
+            content = "# Install the appropriate PyTorch build for your machine\n\n"
     except ImportError:
-        content = "# PyTorch installation\n"
-        content += "# For CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
-        content += "# For CPU: pip install torch\n\n"
+        content = "# Install the appropriate PyTorch build for your machine\n"
+        content += "# CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu124\n"
+        content += "# CPU: pip install torch\n\n"
 
     content += "\n".join(requirements)
     content += "\n"
@@ -91,7 +118,7 @@ def generate_requirements_txt(
 def generate_conda_env(
     stack: str = "trl-peft", output_file: str = "environment-mlenvdoctor.yml"
 ) -> Path:
-    """Generate conda environment file."""
+    """Generate a conda environment file."""
     requirements = get_stack_requirements(stack)
     output_path = Path(output_file)
 
@@ -148,61 +175,32 @@ def install_requirements(
     print_info(f"Installing requirements from {requirements_file}...")
 
     try:
-        import torch
-
-        if not torch.cuda.is_available():
-            print_info("Installing PyTorch with CUDA support...")
-            try:
-                result = run_command(
-                    [
-                        python_cmd,
-                        "-m",
-                        "pip",
-                        "install",
-                        "torch",
-                        "--index-url",
-                        "https://download.pytorch.org/whl/cu124",
-                    ],
-                    timeout=600,
+        pip_check = run_command([python_cmd, "-m", "pip", "--version"], timeout=60)
+        if pip_check.returncode != 0:
+            print_warning(f"pip is not available in {python_cmd}. Attempting to bootstrap it with ensurepip...")
+            ensurepip_result = run_command([python_cmd, "-m", "ensurepip", "--upgrade"], timeout=300)
+            if ensurepip_result.returncode != 0:
+                print_error(
+                    "Unable to bootstrap pip automatically. "
+                    "Install pip in this environment or rerun with a Python that already has pip."
                 )
-                if result.returncode == 0:
-                    print_success("PyTorch with CUDA installed")
-            except Exception as e:
-                print_warning(f"PyTorch CUDA installation skipped: {e}")
-    except ImportError:
-        print_info("Installing PyTorch with CUDA support...")
-        try:
-            result = run_command(
-                [
-                    python_cmd,
-                    "-m",
-                    "pip",
-                    "install",
-                    "torch",
-                    "--index-url",
-                    "https://download.pytorch.org/whl/cu124",
-                ],
-                timeout=600,
-            )
-            if result.returncode == 0:
-                print_success("PyTorch with CUDA installed")
-        except Exception as e:
-            print_warning(f"PyTorch CUDA installation failed: {e}")
+                if ensurepip_result.stderr:
+                    print_error(ensurepip_result.stderr.strip())
+                return False
 
-    try:
         with status_message("[bold green]Installing requirements...[/bold green]"):
             result = run_command(
                 [python_cmd, "-m", "pip", "install", "-r", requirements_file],
                 timeout=600,
             )
-            if result.returncode == 0:
-                print_success("Requirements installed successfully!")
-                return True
+        if result.returncode == 0:
+            print_success("Requirements installed successfully!")
+            return True
 
-            print_error(f"Installation failed: {result.stderr}")
-            return False
-    except Exception as e:
-        print_error(f"Installation error: {e}")
+        print_error(f"Installation failed: {result.stderr}")
+        return False
+    except Exception as exc:
+        print_error(f"Installation error: {exc}")
         return False
 
 
@@ -220,56 +218,203 @@ def create_virtualenv(env_name: str = ".venv") -> Optional[Path]:
         venv.create(env_path, with_pip=True)
         print_success(f"Virtual environment created: {env_name}")
         if sys.platform == "win32":
-            activate_cmd = r".venv\Scripts\activate"
+            activate_cmd = rf"{env_name}\Scripts\activate"
         else:
-            activate_cmd = "source .venv/bin/activate"
+            activate_cmd = f"source {env_name}/bin/activate"
         print_info(f"Activate with: {activate_cmd}")
         return env_path
-    except Exception as e:
-        print_error(f"Failed to create virtual environment: {e}")
+    except Exception as exc:
+        print_error(f"Failed to create virtual environment: {exc}")
         return None
 
 
-def auto_fix(use_conda: bool = False, create_venv: bool = False, stack: str = "trl-peft") -> bool:
+def plan_fixes(
+    issues: List[DiagnosticIssue],
+    *,
+    use_conda: bool,
+    create_venv: bool,
+    stack: str,
+    requirements_output: str = DEFAULT_REQUIREMENTS_FILE,
+    conda_output: str = "environment-mlenvdoctor.yml",
+    venv_path: str = ".venv",
+) -> List[FixAction]:
+    """Turn diagnostics into a predictable fix plan."""
+    critical_issues = [issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status]
+    actionable_library_issue = any(issue.category in {"dependencies", "pytorch"} for issue in critical_issues)
+
+    actions: List[FixAction] = []
+    if create_venv:
+        actions.append(
+            FixAction(
+                kind="create_venv",
+                description=f"Create virtual environment at {venv_path}",
+                output_path=Path(venv_path),
+            )
+        )
+
+    if use_conda:
+        actions.append(
+            FixAction(
+                kind="write_conda",
+                description=f"Generate Conda environment file for stack '{stack}'",
+                output_path=Path(conda_output),
+            )
+        )
+        return actions
+
+    if critical_issues or actionable_library_issue:
+        actions.append(
+            FixAction(
+                kind="write_requirements",
+                description=f"Generate requirements file for stack '{stack}'",
+                output_path=Path(requirements_output),
+            )
+        )
+
+    return actions
+
+
+def _execute_action(
+    action: FixAction,
+    *,
+    stack: str,
+    python_executable: Optional[str],
+) -> tuple[bool, Optional[Path], str]:
+    """Execute a single fix action."""
+    if action.kind == "create_venv":
+        env_path = create_virtualenv(str(action.output_path or ".venv"))
+        return env_path is not None, env_path, action.description
+
+    if action.kind == "write_conda":
+        output_path = generate_conda_env(stack=stack, output_file=str(action.output_path))
+        return True, output_path, action.description
+
+    if action.kind == "write_requirements":
+        output_path = generate_requirements_txt(stack=stack, output_file=str(action.output_path))
+        return True, output_path, action.description
+
+    if action.kind == "install_requirements":
+        if action.output_path is None:
+            return False, None, "Missing requirements path for installation"
+        success = install_requirements(
+            str(action.output_path),
+            use_conda=False,
+            python_executable=python_executable,
+        )
+        return success, action.output_path, action.description
+
+    return False, None, f"Unknown fix action: {action.kind}"
+
+
+def auto_fix(
+    use_conda: bool = False,
+    create_venv: bool = False,
+    stack: str = "trl-peft",
+    *,
+    apply: bool = False,
+    yes: bool = False,
+    dry_run: bool = False,
+    verify: bool = True,
+) -> FixResult:
     """Auto-fix environment issues based on diagnostics."""
     console.print(f"[bold blue]{icon_wrench()} Running Auto-Fix...[/bold blue]\n")
 
-    issues = diagnose_env(full=False)
+    config = load_config()
+    if not apply and not dry_run and yes:
+        apply = True
+
+    if not apply and not dry_run and bool(config.get("fix", {}).get("auto_install", False)):
+        apply = True
+
+    issues = diagnose_env(full=False, show_header=False)
+    actions = plan_fixes(
+        issues,
+        use_conda=use_conda,
+        create_venv=create_venv,
+        stack=stack,
+    )
+
     critical_issues = [issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status]
 
-    if not critical_issues:
+    if not critical_issues and not actions:
         print_success("No critical issues found! Environment looks good.")
-        return True
+        return FixResult(success=True, verification_issues=issues, message="No fix actions required")
 
-    console.print(f"[yellow]Found {len(critical_issues)} critical issue(s) to fix[/yellow]\n")
+    if not actions:
+        print_info("No automated fix actions are available for the current issues.")
+        return FixResult(success=True, verification_issues=issues, message="No automated actions available")
 
-    if use_conda:
-        env_file = generate_conda_env(stack=stack)
-        print_info("Conda environment file generated. Create environment manually:")
-        console.print(f"[cyan]  conda env create -f {env_file}[/cyan]")
-        return True
+    console.print(f"[yellow]Planned {len(actions)} fix action(s)[/yellow]")
+    for action in actions:
+        console.print(f"[cyan]- {action.description}[/cyan]")
 
-    req_file = generate_requirements_txt(stack=stack)
+    if dry_run:
+        print_info("Dry run only. No changes were applied.")
+        return FixResult(success=True, actions=actions, verification_issues=issues, message="Dry run complete")
+
+    should_apply = apply
+    if not apply and not yes:
+        console.print()
+        response = console.input("[bold yellow]Apply these fix actions now? (y/n): [/bold yellow]")
+        should_apply = response.strip().lower() in {"y", "yes"}
+
+    if not should_apply:
+        print_info("No changes applied.")
+        return FixResult(success=True, actions=actions, verification_issues=issues, message="User skipped apply")
+
+    executed_actions: List[str] = []
+    created_paths: List[Path] = []
     venv_python: Optional[str] = None
+    success = True
 
-    if create_venv:
-        venv_path = create_virtualenv()
-        if venv_path:
-            venv_python = str(get_virtualenv_python(venv_path))
-            print_info(f"Using virtual environment Python: {venv_python}")
+    for action in actions:
+        ok, output_path, description = _execute_action(action, stack=stack, python_executable=venv_python)
+        executed_actions.append(description)
+        if output_path is not None:
+            created_paths.append(output_path)
+            if action.kind == "create_venv":
+                venv_python = str(get_virtualenv_python(output_path))
+        if not ok:
+            success = False
+            break
 
-    console.print()
-    install = console.input("[bold yellow]Install requirements now? (y/n): [/bold yellow]")
-    if install.lower() in ["y", "yes"]:
-        return install_requirements(
-            str(req_file),
-            use_conda=use_conda,
+    requirements_path = next((path for path in created_paths if path.name.endswith(".txt")), None)
+    if success and apply and requirements_path is not None and not use_conda:
+        install_action = FixAction(
+            kind="install_requirements",
+            description=f"Install dependencies from {requirements_path}",
+            output_path=requirements_path,
+        )
+        ok, _, description = _execute_action(
+            install_action,
+            stack=stack,
             python_executable=venv_python,
         )
+        executed_actions.append(description)
+        success = success and ok
 
-    print_info("Requirements file generated. Install manually with:")
-    if venv_python:
-        console.print(f"[cyan]  {venv_python} -m pip install -r {req_file}[/cyan]")
+    verification_issues: List[DiagnosticIssue] = []
+    if success and verify:
+        verification_issues = diagnose_env(full=False, show_header=False)
+
+    if success:
+        print_success("Auto-fix completed.")
+        if verification_issues:
+            remaining_critical = [
+                issue for issue in verification_issues if issue.severity == "critical" and "FAIL" in issue.status
+            ]
+            if remaining_critical:
+                print_warning("Verification found remaining critical issues. Review the updated diagnostics.")
+            else:
+                print_success("Verification completed without critical issues.")
     else:
-        console.print(f"[cyan]  pip install -r {req_file}[/cyan]")
-    return True
+        print_error("Auto-fix stopped because one of the actions failed.")
+
+    return FixResult(
+        success=success,
+        actions=actions,
+        executed_actions=executed_actions,
+        verification_issues=verification_issues,
+        created_paths=created_paths,
+        message="Auto-fix completed" if success else "Auto-fix failed",
+    )
