@@ -6,6 +6,7 @@ import importlib
 import re
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from rich.table import Table
@@ -76,12 +77,24 @@ class DoctorFinding:
 
     problem: str
     severity: str
+    confidence: str
     likely_cause: str
     best_fix: str
     verify_steps: List[str]
     evidence: List[str]
     check_id: str
     category: str
+    linked_checks: List[str] = field(default_factory=list)
+
+
+def _find_issue(
+    issues: List["DiagnosticIssue"], check_id: str, status_prefixes: Tuple[str, ...]
+) -> Optional["DiagnosticIssue"]:
+    """Return the first issue matching a selector."""
+    for issue in issues:
+        if issue.check_id == check_id and issue.status.startswith(status_prefixes):
+            return issue
+    return None
 
 
 def make_issue(
@@ -133,29 +146,32 @@ def _summarize_exception(exc: Exception) -> str:
 def _default_verify_steps(issue: DiagnosticIssue) -> List[str]:
     """Return fallback verification steps for a diagnostic issue."""
     verify_by_check_id = {
+        "accelerator_backend": ['python -c "import torch; print(torch.cuda.is_available())"'],
         "python_runtime": ["python --version"],
         "cuda_driver": ["nvidia-smi"],
         "pytorch_installation": ['python -c "import torch; print(torch.__version__)"'],
         "pytorch_version": ['python -c "import torch; print(torch.__version__)"'],
         "pytorch_cuda": ['python -c "import torch; print(torch.cuda.is_available())"'],
         "pytorch_cuda_execution": [
-            'python -c "import torch; x=torch.tensor([1.0], device=\'cuda:0\'); print(x.item())"'
+            "python -c \"import torch; x=torch.tensor([1.0], device='cuda:0'); print(x.item())\""
         ],
         "tensorflow_runtime": [
-            'python -c "import tensorflow as tf; print(tf.config.list_physical_devices(\'GPU\'))"'
+            "python -c \"import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))\""
         ],
         "tensorflow_execution": [
             'python -c "import tensorflow as tf; print(tf.matmul(tf.constant([[1.0]]), tf.constant([[2.0]])).numpy())"'
         ],
         "keras_version": ['python -c "import keras; print(keras.__version__)"'],
-        "jax_runtime": ['python -c "import jax; print(jax.default_backend()); print(jax.devices())"'],
+        "jax_runtime": [
+            'python -c "import jax; print(jax.default_backend()); print(jax.devices())"'
+        ],
         "jax_execution": ['python -c "import jax.numpy as jnp; print(jnp.array([1, 2, 3]).sum())"'],
         "flax_runtime": ['python -c "import flax; print(flax.__version__)"'],
         "gpu_memory": ["nvidia-smi"],
         "disk_space": ["df -h"],
         "docker_gpu": ["docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi"],
         "internet_connectivity": [
-            'python -c "import urllib.request; urllib.request.urlopen(\'https://huggingface.co\', timeout=5)"'
+            "python -c \"import urllib.request; urllib.request.urlopen('https://huggingface.co', timeout=5)\""
         ],
     }
     return verify_by_check_id.get(issue.check_id, ["mlenvdoctor diagnose"])
@@ -164,6 +180,7 @@ def _default_verify_steps(issue: DiagnosticIssue) -> List[str]:
 def _default_likely_cause(issue: DiagnosticIssue) -> str:
     """Infer a likely cause when one is not provided explicitly."""
     cause_by_check_id = {
+        "accelerator_backend": "The detected accelerator path does not match the expected runtime for this machine.",
         "python_runtime": "The active interpreter is older than the minimum version supported by this package.",
         "cuda_driver": "The NVIDIA driver stack is missing, misconfigured, or not visible from the current shell.",
         "pytorch_installation": "PyTorch is not installed in the active environment.",
@@ -187,8 +204,488 @@ def _default_likely_cause(issue: DiagnosticIssue) -> str:
     )
 
 
+def _platform_hint() -> str:
+    """Return a short platform label for user-facing guidance."""
+    if _is_wsl_environment():
+        return "wsl2"
+    if sys.platform == "win32":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "linux"
+
+
+def _is_wsl_environment() -> bool:
+    """Return whether diagnostics are running inside WSL."""
+    if sys.platform != "linux":
+        return False
+
+    release_path = Path("/proc/sys/kernel/osrelease")
+    version_path = Path("/proc/version")
+    for path in (release_path, version_path):
+        try:
+            value = path.read_text(encoding="utf-8", errors="ignore").lower()
+            if "microsoft" in value or "wsl" in value:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _issue_matches(issue: DiagnosticIssue, check_id: str, status_prefixes: Tuple[str, ...]) -> bool:
+    """Return whether an issue matches a rule selector."""
+    return issue.check_id == check_id and issue.status.startswith(status_prefixes)
+
+
+def _has_issue(
+    issues: List[DiagnosticIssue], check_id: str, status_prefixes: Tuple[str, ...]
+) -> bool:
+    """Check if the issue list contains a matching issue."""
+    return any(_issue_matches(issue, check_id, status_prefixes) for issue in issues)
+
+
+def _collect_evidence(issues: List[DiagnosticIssue], check_ids: List[str]) -> List[str]:
+    """Collect the best evidence lines for linked checks."""
+    evidence: List[str] = []
+    for issue in issues:
+        if issue.check_id in check_ids:
+            if issue.evidence:
+                evidence.extend(issue.evidence[:2])
+            elif issue.details:
+                evidence.append(issue.details)
+            else:
+                evidence.append(issue.status)
+    return evidence[:4]
+
+
+def _root_cause_findings(issues: List[DiagnosticIssue]) -> List[DoctorFinding]:
+    """Infer higher-level doctor findings from detailed checks."""
+    findings: List[DoctorFinding] = []
+
+    if _has_issue(issues, "cuda_driver", ("FAIL",)):
+        platform_hint = _platform_hint()
+        likely_cause = (
+            "The NVIDIA driver is missing, broken, or not visible from the current shell."
+        )
+        best_fix = "Install or repair the NVIDIA driver, then re-run `nvidia-smi` before retrying framework installs."
+        if platform_hint == "wsl2":
+            likely_cause = (
+                "WSL cannot currently see the host NVIDIA stack. This usually means GPU passthrough is not enabled "
+                "or host/WSL NVIDIA components are out of sync."
+            )
+            best_fix = (
+                "Verify GPU support on the Windows host first, then update WSL and NVIDIA WSL drivers/tooling "
+                "before retrying inside WSL."
+            )
+        elif platform_hint == "macos":
+            likely_cause = "NVIDIA CUDA tooling is not available in this runtime. On macOS, CUDA-first guidance is usually not applicable."
+            best_fix = "Use Apple-supported acceleration paths such as MPS when available, or continue with CPU-focused workflows."
+        findings.append(
+            DoctorFinding(
+                problem="GPU driver stack is not usable",
+                severity="critical",
+                confidence="high",
+                likely_cause=likely_cause,
+                best_fix=best_fix,
+                verify_steps=["nvidia-smi", "mlenvdoctor doctor"],
+                evidence=_collect_evidence(issues, ["cuda_driver"]),
+                check_id="root_gpu_driver",
+                category="gpu",
+                linked_checks=["cuda_driver"],
+            )
+        )
+
+    backend_issue = _find_issue(issues, "accelerator_backend", ("WARN",))
+    if backend_issue is not None:
+        findings.append(
+            DoctorFinding(
+                problem="Accelerator backend path needs attention",
+                severity="warning",
+                confidence=backend_issue.confidence,
+                likely_cause=backend_issue.likely_cause
+                or "The current runtime backend is different from the expected accelerator path.",
+                best_fix=backend_issue.recommendation
+                or backend_issue.fix
+                or "Review runtime backend configuration.",
+                verify_steps=backend_issue.verify_steps or _default_verify_steps(backend_issue),
+                evidence=backend_issue.evidence
+                or ([backend_issue.details] if backend_issue.details else []),
+                check_id="root_accelerator_backend",
+                category="platform",
+                linked_checks=["accelerator_backend"],
+            )
+        )
+
+    if _has_issue(issues, "pytorch_installation", ("FAIL",)):
+        findings.append(
+            DoctorFinding(
+                problem="PyTorch is missing from the active environment",
+                severity="critical",
+                confidence="high",
+                likely_cause="The current Python environment does not have PyTorch installed.",
+                best_fix="Install a PyTorch build that matches your target hardware, then rerun `mlenvdoctor doctor`.",
+                verify_steps=[
+                    'python -c "import torch; print(torch.__version__)"',
+                    'python -c "import torch; print(torch.cuda.is_available())"',
+                ],
+                evidence=_collect_evidence(issues, ["pytorch_installation"]),
+                check_id="root_pytorch_missing",
+                category="pytorch",
+                linked_checks=["pytorch_installation"],
+            )
+        )
+
+    pytorch_cuda_issue = _find_issue(issues, "pytorch_cuda", ("FAIL",))
+    if (
+        _has_issue(issues, "cuda_driver", ("PASS",))
+        and pytorch_cuda_issue is not None
+        and not _has_issue(issues, "pytorch_installation", ("FAIL",))
+    ):
+        has_build_metadata = "torch_cuda_build" in pytorch_cuda_issue.metadata
+        torch_cuda_build = pytorch_cuda_issue.metadata.get("torch_cuda_build")
+        if has_build_metadata and torch_cuda_build is None:
+            problem = "PyTorch is installed as a CPU-only build on a GPU-capable machine"
+            likely_cause = (
+                "The machine exposes an NVIDIA driver, but the installed PyTorch wheel was built "
+                "without CUDA support."
+            )
+            best_fix = (
+                "Install the CUDA-enabled PyTorch wheel for this environment, then verify that "
+                "`torch.version.cuda` is no longer empty."
+            )
+            check_id = "root_pytorch_cpu_only_build"
+        else:
+            problem = "PyTorch cannot use the available GPU"
+            likely_cause = (
+                "The machine exposes an NVIDIA driver, but the installed PyTorch build is mismatched "
+                "with the local CUDA or runtime setup."
+            )
+            best_fix = (
+                "Reinstall the correct CUDA-enabled PyTorch wheel for this environment, then verify "
+                "CUDA visibility in Python."
+            )
+            check_id = "root_pytorch_cuda_mismatch"
+
+        findings.append(
+            DoctorFinding(
+                problem=problem,
+                severity="critical",
+                confidence="high",
+                likely_cause=likely_cause,
+                best_fix=best_fix,
+                verify_steps=[
+                    'python -c "import torch; print(torch.__version__); print(torch.version.cuda)"',
+                    'python -c "import torch; print(torch.cuda.is_available())"',
+                ],
+                evidence=_collect_evidence(
+                    issues, ["cuda_driver", "pytorch_cuda", "pytorch_version"]
+                ),
+                check_id=check_id,
+                category="pytorch",
+                linked_checks=["cuda_driver", "pytorch_cuda", "pytorch_version"],
+            )
+        )
+
+    if _has_issue(issues, "tensorflow_runtime", ("WARN",)):
+        platform_hint = _platform_hint()
+        likely_cause = "TensorFlow is installed, but the active runtime does not include working GPU support for this machine."
+        best_fix = "Install or repair the TensorFlow GPU-supported runtime appropriate for this platform, then recheck visible GPU devices."
+        if platform_hint == "windows":
+            likely_cause = (
+                "TensorFlow is installed on Windows, but the active setup is not using a supported GPU path. "
+                "Native Windows TensorFlow GPU workflows are limited compared with Linux/WSL2 paths."
+            )
+            best_fix = (
+                "Prefer a supported Windows path such as WSL2 for CUDA-based TensorFlow workflows, "
+                "or use a Windows-appropriate backend before rechecking GPU visibility."
+            )
+        elif platform_hint == "macos":
+            likely_cause = (
+                "TensorFlow is installed on macOS, where CUDA guidance is not applicable and accelerator support "
+                "depends on Apple-specific runtime paths."
+            )
+            best_fix = (
+                "Use the macOS-supported TensorFlow path for Apple hardware and verify available devices again "
+                "instead of following CUDA-specific instructions."
+            )
+        findings.append(
+            DoctorFinding(
+                problem="TensorFlow is falling back away from the expected GPU path",
+                severity="warning",
+                confidence="medium",
+                likely_cause=likely_cause,
+                best_fix=best_fix,
+                verify_steps=[
+                    "python -c \"import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))\"",
+                    "mlenvdoctor diagnose",
+                ],
+                evidence=_collect_evidence(issues, ["tensorflow_runtime", "tensorflow_execution"]),
+                check_id="root_tensorflow_gpu_path",
+                category="tensorflow",
+                linked_checks=["tensorflow_runtime", "tensorflow_execution"],
+            )
+        )
+
+    if _has_issue(issues, "jax_runtime", ("WARN",)):
+        platform_hint = _platform_hint()
+        likely_cause = "JAX is installed, but the active environment lacks a working accelerator-enabled backend for this machine."
+        best_fix = "Install the correct JAX backend for your platform, then verify `jax.default_backend()` again."
+        if platform_hint == "windows":
+            likely_cause = (
+                "JAX is installed on Windows, but the active environment is using the CPU backend. "
+                "Accelerator-enabled JAX support is more constrained than on Linux."
+            )
+            best_fix = (
+                "Prefer a supported accelerator path such as Linux/WSL2 for GPU-backed JAX workflows, "
+                "or accept CPU-only execution for this environment."
+            )
+        elif platform_hint == "macos":
+            likely_cause = (
+                "JAX is installed on macOS, but the active backend is still CPU-only. "
+                "Accelerator availability depends on the local Apple-supported runtime path."
+            )
+            best_fix = (
+                "Verify the macOS-supported JAX backend for this hardware, or continue with CPU-only execution "
+                "if accelerator support is not available."
+            )
+        findings.append(
+            DoctorFinding(
+                problem="JAX is using the CPU backend unexpectedly",
+                severity="warning",
+                confidence="medium",
+                likely_cause=likely_cause,
+                best_fix=best_fix,
+                verify_steps=[
+                    'python -c "import jax; print(jax.default_backend()); print(jax.devices())"',
+                    "mlenvdoctor diagnose",
+                ],
+                evidence=_collect_evidence(issues, ["jax_runtime", "jax_execution"]),
+                check_id="root_jax_backend",
+                category="jax",
+                linked_checks=["jax_runtime", "jax_execution"],
+            )
+        )
+
+    if _has_issue(issues, "docker_gpu", ("FAIL", "WARN")) and _has_issue(
+        issues, "cuda_driver", ("PASS",)
+    ):
+        findings.append(
+            DoctorFinding(
+                problem="Docker GPU passthrough is misconfigured",
+                severity="warning",
+                confidence="high",
+                likely_cause="The host can see the NVIDIA stack, but container GPU access is not configured correctly.",
+                best_fix="Repair the NVIDIA Container Toolkit or Docker GPU runtime configuration before relying on GPU containers.",
+                verify_steps=[
+                    "docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi",
+                    "mlenvdoctor diagnose --full",
+                ],
+                evidence=_collect_evidence(issues, ["cuda_driver", "docker_gpu"]),
+                check_id="root_docker_gpu_runtime",
+                category="docker",
+                linked_checks=["cuda_driver", "docker_gpu"],
+            )
+        )
+
+    if _has_issue(issues, "gpu_memory", ("WARN",)):
+        findings.append(
+            DoctorFinding(
+                problem="GPU memory pressure is too high for the current workload",
+                severity="warning",
+                confidence="high",
+                likely_cause="Other processes or previous allocations are using too much VRAM for the intended ML task.",
+                best_fix="Free GPU memory, reduce workload size, or switch to a smaller model or batch size before retrying.",
+                verify_steps=["nvidia-smi", "mlenvdoctor diagnose --full"],
+                evidence=_collect_evidence(issues, ["gpu_memory"]),
+                check_id="root_gpu_memory_pressure",
+                category="gpu",
+                linked_checks=["gpu_memory"],
+            )
+        )
+
+    if _has_issue(issues, "disk_space", ("WARN",)):
+        findings.append(
+            DoctorFinding(
+                problem="Local disk space is too low for reliable ML workflows",
+                severity="warning",
+                confidence="high",
+                likely_cause="The cache or working volume does not have enough room for downloads, model files, or artifacts.",
+                best_fix="Free disk space or move caches to a larger drive before retrying downloads or training jobs.",
+                verify_steps=["df -h", "mlenvdoctor diagnose --full"],
+                evidence=_collect_evidence(issues, ["disk_space"]),
+                check_id="root_disk_space",
+                category="system",
+                linked_checks=["disk_space"],
+            )
+        )
+
+    dependency_issues = [
+        issue
+        for issue in issues
+        if issue.category == "dependencies" and issue.status.startswith(("FAIL", "WARN"))
+    ]
+    if len(dependency_issues) >= 2:
+        failing_libs = [issue.name for issue in dependency_issues]
+        has_missing = any(issue.status.startswith("FAIL") for issue in dependency_issues)
+        findings.append(
+            DoctorFinding(
+                problem="The core ML training dependency stack is incomplete or outdated",
+                severity="critical" if has_missing else "warning",
+                confidence="high" if len(dependency_issues) >= 3 else "medium",
+                likely_cause=(
+                    "The active environment is missing or lagging on multiple libraries required for "
+                    "modern training and fine-tuning workflows."
+                ),
+                best_fix=(
+                    "Install or refresh the recommended training stack together instead of fixing "
+                    "packages one by one."
+                ),
+                verify_steps=[
+                    "mlenvdoctor stack llm-training",
+                    "mlenvdoctor diagnose",
+                ],
+                evidence=failing_libs[:4],
+                check_id="root_ml_stack_dependencies",
+                category="dependencies",
+                linked_checks=[issue.check_id for issue in dependency_issues],
+            )
+        )
+
+    return findings
+
+
+def check_accelerator_backend() -> List[DiagnosticIssue]:
+    """Detect the active accelerator backend and highlight platform mismatches."""
+    platform_hint = _platform_hint()
+    nvidia_visible = check_command_exists("nvidia-smi")
+
+    torch_module = torch
+    if torch_module is None:
+        try:
+            torch_module = importlib.import_module("torch")
+        except Exception:
+            torch_module = None
+
+    if torch_module is None:
+        details = "PyTorch not installed; backend detection is limited to host tooling."
+        if platform_hint == "wsl2":
+            details = "WSL environment detected without PyTorch installed. Install PyTorch to validate CUDA passthrough."
+        status = "INFO - Backend detection limited (PyTorch not installed)"
+        return [
+            make_issue(
+                name="Accelerator Backend",
+                status=status,
+                severity="info",
+                fix="Install PyTorch and rerun diagnostics to detect runtime backend",
+                check_id="accelerator_backend",
+                category="platform",
+                details=details,
+                confidence="medium",
+                evidence=[f"platform={platform_hint}", f"nvidia_visible={nvidia_visible}"],
+                metadata={"platform": platform_hint, "nvidia_visible": nvidia_visible},
+            )
+        ]
+
+    cuda_available = False
+    mps_available = False
+    try:
+        cuda_available = bool(torch_module.cuda.is_available())
+    except Exception:
+        cuda_available = False
+    try:
+        mps_available = bool(
+            getattr(torch_module.backends, "mps", None) and torch_module.backends.mps.is_available()
+        )
+    except Exception:
+        mps_available = False
+
+    backend = "cpu"
+    if cuda_available:
+        backend = "cuda"
+    elif mps_available:
+        backend = "mps"
+
+    status = f"PASS - backend={backend}"
+    severity = "info"
+    fix = ""
+    likely_cause = ""
+    recommendation = ""
+    verify_steps = ['python -c "import torch; print(torch.cuda.is_available())"']
+
+    if platform_hint == "wsl2" and nvidia_visible and backend != "cuda":
+        status = f"WARN - backend={backend} in WSL2 with NVIDIA host visibility"
+        severity = "warning"
+        likely_cause = (
+            "WSL can see NVIDIA tooling, but the active PyTorch runtime is not using CUDA."
+        )
+        fix = (
+            "Install a CUDA-enabled PyTorch build inside WSL and confirm host/WSL driver alignment."
+        )
+        recommendation = fix
+        verify_steps = [
+            "nvidia-smi",
+            'python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available())"',
+        ]
+    elif platform_hint == "macos" and backend == "cpu":
+        status = "WARN - backend=cpu on macOS"
+        severity = "warning"
+        likely_cause = (
+            "The current runtime is using CPU only on macOS; MPS may be unavailable or not enabled."
+        )
+        fix = "Use an Apple Silicon-compatible PyTorch build and verify MPS availability if accelerator use is expected."
+        recommendation = fix
+        verify_steps = [
+            "python -c \"import torch; print(hasattr(torch.backends, 'mps')); print(getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available())\"",
+        ]
+    elif platform_hint == "windows" and nvidia_visible and backend == "cpu":
+        status = "WARN - backend=cpu on Windows with NVIDIA tooling"
+        severity = "warning"
+        likely_cause = "PyTorch is running CPU-only despite NVIDIA tooling being present."
+        fix = (
+            "Use a CUDA-enabled PyTorch build on a supported path (often WSL2 for CUDA workflows)."
+        )
+        recommendation = fix
+
+    return [
+        make_issue(
+            name="Accelerator Backend",
+            status=status,
+            severity=severity,
+            fix=fix,
+            check_id="accelerator_backend",
+            category="platform",
+            details=f"Platform: {platform_hint}, nvidia-smi visible: {nvidia_visible}",
+            recommendation=recommendation or fix,
+            likely_cause=likely_cause,
+            verify_steps=verify_steps,
+            confidence="high" if severity == "info" else "medium",
+            evidence=[
+                f"platform={platform_hint}",
+                f"backend={backend}",
+                f"nvidia_visible={nvidia_visible}",
+            ],
+            metadata={
+                "platform": platform_hint,
+                "backend": backend,
+                "nvidia_visible": nvidia_visible,
+            },
+        )
+    ]
+
+
 def summarize_for_doctor(issues: List["DiagnosticIssue"]) -> List[DoctorFinding]:
     """Convert detailed issues into prioritized doctor findings."""
+    findings = _root_cause_findings(issues)
+    if findings:
+        findings.sort(
+            key=lambda finding: (
+                0 if finding.severity == "critical" else 1,
+                finding.category,
+                finding.problem,
+            )
+        )
+        return findings
+
     actionable_issues = [
         issue
         for issue in issues
@@ -202,21 +699,25 @@ def summarize_for_doctor(issues: List["DiagnosticIssue"]) -> List[DoctorFinding]
         )
     )
 
-    findings: List[DoctorFinding] = []
+    fallback_findings: List[DoctorFinding] = []
     for issue in actionable_issues:
-        findings.append(
+        fallback_findings.append(
             DoctorFinding(
                 problem=issue.name,
                 severity=issue.severity,
+                confidence=issue.confidence,
                 likely_cause=issue.likely_cause or _default_likely_cause(issue),
-                best_fix=issue.recommendation or issue.fix or "Run `mlenvdoctor diagnose` for more detail.",
+                best_fix=issue.recommendation
+                or issue.fix
+                or "Run `mlenvdoctor diagnose` for more detail.",
                 verify_steps=issue.verify_steps or _default_verify_steps(issue),
                 evidence=issue.evidence or ([issue.details] if issue.details else []),
                 check_id=issue.check_id,
                 category=issue.category,
+                linked_checks=[issue.check_id] if issue.check_id else [],
             )
         )
-    return findings
+    return fallback_findings
 
 
 def get_fix_commands(issues: List["DiagnosticIssue"]) -> List[Dict[str, str]]:
@@ -277,6 +778,38 @@ def check_python_runtime() -> List[DiagnosticIssue]:
 def check_cuda_driver() -> List[DiagnosticIssue]:
     """Check NVIDIA CUDA driver availability."""
     if not check_command_exists("nvidia-smi"):
+        platform_hint = _platform_hint()
+        if platform_hint == "macos":
+            return [
+                make_issue(
+                    name="NVIDIA GPU Driver",
+                    status="INFO - NVIDIA CUDA driver tooling not detected (expected on most macOS systems)",
+                    severity="info",
+                    fix=(
+                        "python -c \"import torch; print(getattr(torch.backends, 'mps', None) and "
+                        'torch.backends.mps.is_available())"'
+                    ),
+                    check_id="cuda_driver",
+                    category="gpu",
+                    details="macOS typically relies on Apple Silicon MPS or CPU workflows instead of CUDA.",
+                    confidence="high",
+                    evidence=["platform=macos", "nvidia-smi missing from PATH"],
+                )
+            ]
+        if platform_hint == "wsl2":
+            return [
+                make_issue(
+                    name="NVIDIA GPU Driver",
+                    status="WARN - nvidia-smi not found in WSL",
+                    severity="warning",
+                    fix="Check host GPU drivers and WSL GPU passthrough, then run: nvidia-smi",
+                    check_id="cuda_driver",
+                    category="gpu",
+                    details="WSL environment detected. GPU passthrough may not be active in this distro/session.",
+                    confidence="high",
+                    evidence=["platform=wsl2", "nvidia-smi missing from PATH"],
+                )
+            ]
         return [
             make_issue(
                 name="NVIDIA GPU Driver",
@@ -420,6 +953,7 @@ def check_pytorch_cuda() -> List[DiagnosticIssue]:
         return issues
 
     if not cuda_available:
+        torch_cuda_build = getattr(torch.version, "cuda", None)
         issues.append(
             make_issue(
                 name="PyTorch CUDA",
@@ -429,9 +963,17 @@ def check_pytorch_cuda() -> List[DiagnosticIssue]:
                 check_id="pytorch_cuda",
                 category="pytorch",
                 details=f"PyTorch {torch_version} is installed but torch.cuda.is_available() is false",
+                likely_cause=(
+                    "The installed PyTorch build does not include CUDA support."
+                    if torch_cuda_build is None
+                    else "The installed PyTorch build cannot use the currently available CUDA runtime."
+                ),
                 confidence="high",
-                evidence=["torch.cuda.is_available() == False"],
-                metadata={"torch_version": torch_version},
+                evidence=[
+                    "torch.cuda.is_available() == False",
+                    f"torch.version.cuda={torch_cuda_build or 'None'}",
+                ],
+                metadata={"torch_version": torch_version, "torch_cuda_build": torch_cuda_build},
             )
         )
         return issues
@@ -587,7 +1129,9 @@ def check_tensorflow_keras() -> List[DiagnosticIssue]:
         severity = "info"
         fix = ""
         details = (
-            f"Detected {len(gpu_devices)} GPU device(s)" if gpu_devices else "CPU-only TensorFlow runtime"
+            f"Detected {len(gpu_devices)} GPU device(s)"
+            if gpu_devices
+            else "CPU-only TensorFlow runtime"
         )
         if check_command_exists("nvidia-smi") and not gpu_devices:
             status = f"WARN - {tf_version} (GPU not visible)"
@@ -612,7 +1156,8 @@ def check_tensorflow_keras() -> List[DiagnosticIssue]:
         try:
             a = tensorflow.constant([[1.0, 2.0]])
             b = tensorflow.constant([[3.0], [4.0]])
-            result = tensorflow.matmul(a, b).numpy().tolist()
+            result_value = tensorflow.matmul(a, b).numpy()
+            result = result_value.tolist() if hasattr(result_value, "tolist") else result_value
             issues.append(
                 make_issue(
                     name="TensorFlow Execution",
@@ -1168,17 +1713,22 @@ def diagnose_env(
 ) -> List[DiagnosticIssue]:
     """Run diagnostic checks and return normalized issues."""
     if show_header:
-        console.print(f"[bold blue]{icon_search()} Running ML Environment Diagnostics...[/bold blue]\n")
+        console.print(
+            f"[bold blue]{icon_search()} Running ML Environment Diagnostics...[/bold blue]\n"
+        )
 
     core_checks = [
         check_python_runtime,
+        check_accelerator_backend,
         check_cuda_driver,
         check_pytorch_cuda,
         check_ml_libraries,
         check_tensorflow_keras,
         check_jax_flax,
     ]
-    issues = _run_check_group(core_checks, parallel=parallel, timeout=60.0, failure_severity="critical")
+    issues = _run_check_group(
+        core_checks, parallel=parallel, timeout=60.0, failure_severity="critical"
+    )
 
     if full:
         extended_checks = [
@@ -1188,7 +1738,9 @@ def diagnose_env(
             check_internet_connectivity,
         ]
         issues.extend(
-            _run_check_group(extended_checks, parallel=parallel, timeout=120.0, failure_severity="warning")
+            _run_check_group(
+                extended_checks, parallel=parallel, timeout=120.0, failure_severity="warning"
+            )
         )
 
     return issues
@@ -1228,6 +1780,10 @@ def print_diagnostic_table(issues: List[DiagnosticIssue]) -> None:
     if critical_count == 0 and warning_count == 0:
         console.print("\n[bold green]Your ML environment looks ready for fine-tuning![/bold green]")
     elif critical_count > 0:
-        console.print(f"\n[bold red]{icon_warning()}  Please fix critical issues before proceeding.[/bold red]")
+        console.print(
+            f"\n[bold red]{icon_warning()}  Please fix critical issues before proceeding.[/bold red]"
+        )
     else:
-        console.print("\n[bold yellow]Consider addressing warnings for optimal performance.[/bold yellow]")
+        console.print(
+            "\n[bold yellow]Consider addressing warnings for optimal performance.[/bold yellow]"
+        )

@@ -15,7 +15,7 @@ _ICONS = {
 
 
 def get_icon(
-    icon_name: Literal["search", "check", "cross", "warning", "info", "wrench", "whale", "test"]
+    icon_name: Literal["search", "check", "cross", "warning", "info", "wrench", "whale", "test"],
 ) -> str:
     """Get a safe ASCII icon for the current platform."""
     return _ICONS.get(icon_name, "")

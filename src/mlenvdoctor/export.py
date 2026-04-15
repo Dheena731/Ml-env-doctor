@@ -6,7 +6,31 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .diagnose import DiagnosticIssue, get_fix_commands
+from .diagnose import DiagnosticIssue, get_fix_commands, summarize_for_doctor
+
+EXPORT_SCHEMA_VERSION = "1.0"
+DOCTOR_SUMMARY_SCHEMA_VERSION = "1.0"
+
+
+def build_runtime_context(issues: List[DiagnosticIssue]) -> Dict[str, Any]:
+    """Extract a compact runtime context from diagnostics."""
+    for issue in issues:
+        if issue.check_id == "accelerator_backend":
+            platform = issue.metadata.get("platform", "unknown")
+            backend = issue.metadata.get("backend", "unknown")
+            nvidia_visible = issue.metadata.get("nvidia_visible", False)
+            return {
+                "platform": platform,
+                "backend": backend,
+                "nvidia_tooling": bool(nvidia_visible),
+                "status": issue.status,
+            }
+    return {
+        "platform": "unknown",
+        "backend": "unknown",
+        "nvidia_tooling": False,
+        "status": "unavailable",
+    }
 
 
 def issue_to_dict(issue: DiagnosticIssue) -> Dict[str, Any]:
@@ -25,6 +49,22 @@ def issue_to_dict(issue: DiagnosticIssue) -> Dict[str, Any]:
         "confidence": issue.confidence,
         "evidence": issue.evidence,
         "metadata": issue.metadata,
+    }
+
+
+def doctor_finding_to_dict(finding: Any) -> Dict[str, Any]:
+    """Convert a doctor summary finding to dictionary."""
+    return {
+        "problem": finding.problem,
+        "severity": finding.severity,
+        "confidence": finding.confidence,
+        "likely_cause": finding.likely_cause,
+        "best_fix": finding.best_fix,
+        "verify_steps": finding.verify_steps,
+        "evidence": finding.evidence,
+        "check_id": finding.check_id,
+        "category": finding.category,
+        "linked_checks": finding.linked_checks,
     }
 
 
@@ -60,6 +100,11 @@ def build_export_data(
     """Build the shared machine-readable diagnostics payload."""
     export_data: Dict[str, Any] = {
         "issues": [issue_to_dict(issue) for issue in issues],
+        "doctor_summary_schema_version": DOCTOR_SUMMARY_SCHEMA_VERSION,
+        "doctor_summary": [
+            doctor_finding_to_dict(finding) for finding in summarize_for_doctor(issues)
+        ],
+        "runtime_context": build_runtime_context(issues),
         "summary": build_summary(issues),
         "exit_code": get_exit_code(issues),
         "fixes": get_fix_commands(issues),
@@ -70,6 +115,7 @@ def build_export_data(
 
         export_data["metadata"] = {
             "version": __version__,
+            "schema_version": EXPORT_SCHEMA_VERSION,
             "timestamp": datetime.now().isoformat(),
             "tool": "mlenvdoctor",
         }
@@ -165,6 +211,7 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
         output_file = Path("diagnostic-results.html")
 
     summary = build_summary(issues)
+    runtime_context = build_runtime_context(issues)
 
     from . import __version__
 
@@ -273,6 +320,12 @@ def export_html(issues: List[DiagnosticIssue], output_file: Optional[Path] = Non
             <h3>Critical Issues</h3>
             <div class="value critical">{summary["critical"]}</div>
         </div>
+    </div>
+    <div class="summary-card" style="margin-bottom: 20px;">
+        <h3>Detected Runtime</h3>
+        <div>platform: <strong>{html.escape(str(runtime_context["platform"]))}</strong></div>
+        <div>backend: <strong>{html.escape(str(runtime_context["backend"]))}</strong></div>
+        <div>nvidia_tooling: <strong>{runtime_context["nvidia_tooling"]}</strong></div>
     </div>
 
     <table>

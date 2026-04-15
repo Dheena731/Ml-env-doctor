@@ -3,6 +3,10 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)](https://pypi.org/project/mlenvdoctor/)
+[![CI](https://github.com/Dheena731/Ml-env-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/Dheena731/Ml-env-doctor/actions/workflows/ci.yml)
+[![PyPI - Downloads](https://static.pepy.tech/badge/mlenvdoctor)](https://pepy.tech/project/mlenvdoctor)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mlenvdoctor)](https://pypi.org/project/mlenvdoctor/)
+[![codecov](https://codecov.io/gh/Dheena731/Ml-env-doctor/branch/master/graph/badge.svg)](https://codecov.io/gh/Dheena731/Ml-env-doctor)
 
 > Diagnose ML environment issues, export shareable reports, and generate safe starting fixes.
 
@@ -20,7 +24,7 @@ Repository: `https://github.com/Dheena731/Ml-env-doctor`
 - Checks common ML training libraries like `transformers`, `peft`, `trl`, `datasets`, and `accelerate`
 - Optionally checks GPU memory, disk space, Docker GPU support, and Hugging Face connectivity
 - Exports JSON, CSV, and HTML reports
-- Generates requirements files, Conda environment files, and Dockerfiles
+- Generates requirements files,  Conda environment files, and Dockerfiles
 - Provides a safe fix workflow with planning, dry-run, apply, and verification modes
 
 ## What It Does Not Claim Yet
@@ -39,8 +43,10 @@ mlenvdoctor diagnose
 mlenvdoctor diagnose --full
 mlenvdoctor diagnose --json -
 mlenvdoctor report
+mlenvdoctor fix --plan
 mlenvdoctor fix --dry-run
 mlenvdoctor fix --apply --yes
+mlenvdoctor fix --verify
 mlenvdoctor dockerize tinyllama --stack minimal
 ```
 
@@ -92,9 +98,11 @@ mlenvdoctor report --quick --output-dir artifacts/mlenvdoctor
 The fix workflow is intentionally explicit:
 
 ```bash
+mlenvdoctor fix --plan
 mlenvdoctor fix --dry-run
 mlenvdoctor fix --apply
 mlenvdoctor fix --apply --yes
+mlenvdoctor fix --verify
 mlenvdoctor fix --venv --apply --yes
 mlenvdoctor fix --conda
 mlenvdoctor fix --stack llm-training --dry-run
@@ -103,10 +111,12 @@ mlenvdoctor fix --stack llm-training --dry-run
 Current fix behavior:
 
 - Plans file-generation and environment actions from detected issues
+- Labels each planned action by risk level
 - Supports dry-run mode before changes
 - Can create a virtual environment
 - Can generate either `requirements-mlenvdoctor.txt` or `environment-mlenvdoctor.yml`
 - Can install requirements when `--apply` is used
+- Supports explicit verification via `mlenvdoctor fix --verify`
 - Re-runs diagnostics for verification after a successful apply
 
 ### Stack
@@ -143,6 +153,7 @@ This is currently a small JSON-lines stub with:
 
 - `diagnose`
 - `get_fixes`
+- `doctor_summary`
 
 ## Output Schema
 
@@ -153,6 +164,7 @@ JSON exports include:
 - recommendation, likely cause, and verify steps
 - confidence
 - evidence and metadata blocks
+- runtime context (platform, detected backend, NVIDIA tooling visibility)
 - summary counts and exit code
 
 That makes the tool more useful for CI parsing, dashboards, and future integrations.
@@ -162,11 +174,26 @@ That makes the tool more useful for CI parsing, dashboards, and future integrati
 ```bash
 git clone https://github.com/Dheena731/Ml-env-doctor.git
 cd Ml-env-doctor
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
-pytest
-ruff check src/ tests/
-black src/ tests/
-mypy src/
+python -m black src tests
+python -m ruff check src tests
+python -m pytest
+python -m mypy src
+```
+
+## CI/CD and Release Flow
+
+- CI runs formatting (`black --check`), lint (`ruff`), tests (`pytest`), and package build checks (`python -m build`, `twine check`) on every push/PR.
+- The matrix tests Linux (3.8-3.11), macOS (3.11), and Windows (3.11).
+- A tagged GitHub release triggers the publish job to upload built artifacts to PyPI.
+- If CI fails locally vs. GitHub, run these exact commands first:
+
+```bash
+python -m black src tests
+python -m ruff check src tests
+python -m pytest
 ```
 
 ## Test Strategy
@@ -185,6 +212,7 @@ This keeps the main test suite independent from whether `mlenvdoctor` was instal
 - [IMPROVEMENTS_ROADMAP.md](IMPROVEMENTS_ROADMAP.md) outlines future milestones
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) explains the current project architecture and product shape
 - [docs/KILLER_PRODUCT_PLAN.md](docs/KILLER_PRODUCT_PLAN.md) is the strategic roadmap for turning the project into a category-leading product
+- [docs/PHASED_EXECUTION_PLAN.md](docs/PHASED_EXECUTION_PLAN.md) breaks the strategy into execution phases and current build focus
 - [docker/README.md](docker/README.md) documents Docker-specific workflows
 
 ## License

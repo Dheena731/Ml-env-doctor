@@ -55,8 +55,8 @@ def smoke_test_lora() -> bool:
     try:
         # Try importing required libraries
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
             from peft import LoraConfig, get_peft_model
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as e:
             print_error(f"Required library not available: {e}")
             return False

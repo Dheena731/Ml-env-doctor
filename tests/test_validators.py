@@ -1,16 +1,17 @@
 """Tests for validators module."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from mlenvdoctor.exceptions import ConfigurationError
 from mlenvdoctor.validators import (
+    sanitize_command,
     validate_file_path,
     validate_log_level,
     validate_model_name,
     validate_stack_name,
     validate_timeout,
-    sanitize_command,
 )
 
 

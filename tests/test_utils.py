@@ -71,6 +71,39 @@ def test_build_export_data_includes_exit_code():
     assert data["summary"]["warnings"] == 1
     assert data["issues"][0]["check_id"] == ""
     assert data["issues"][0]["verify_steps"] == []
+    assert data["doctor_summary_schema_version"] == "1.0"
+    assert "doctor_summary" in data
+    assert "runtime_context" in data
+
+
+def test_build_export_data_includes_schema_version_when_metadata_enabled():
+    """Metadata-enabled exports should include a schema version."""
+    issues = [DiagnosticIssue("A", "WARN - attention", "warning", "pip install a")]
+
+    data = build_export_data(issues, include_metadata=True)
+
+    assert data["metadata"]["schema_version"] == "1.0"
+
+
+def test_build_export_data_includes_runtime_context_from_accelerator_backend():
+    """Export payload should surface detected runtime context for CI consumers."""
+    issues = [
+        DiagnosticIssue(
+            name="Accelerator Backend",
+            status="PASS - backend=cuda",
+            severity="info",
+            fix="",
+            check_id="accelerator_backend",
+            category="platform",
+            metadata={"platform": "linux", "backend": "cuda", "nvidia_visible": True},
+        )
+    ]
+
+    data = build_export_data(issues, include_metadata=False)
+
+    assert data["runtime_context"]["platform"] == "linux"
+    assert data["runtime_context"]["backend"] == "cuda"
+    assert data["runtime_context"]["nvidia_tooling"] is True
 
 
 def test_get_exit_code_prefers_critical_over_warning():
@@ -95,10 +128,28 @@ def test_mcp_stub_get_fixes_uses_machine_readable_shape(monkeypatch):
     """The MCP stub should return fix data in a stable schema."""
     issues = [DiagnosticIssue("Torch", "FAIL - missing", "critical", "pip install torch")]
 
-    monkeypatch.setattr("mlenvdoctor.mcp.diagnose_env", lambda full=False, show_header=False: issues)
+    monkeypatch.setattr(
+        "mlenvdoctor.mcp.diagnose_env", lambda full=False, show_header=False: issues
+    )
 
     response = _handle_request({"tool": "get_fixes", "arguments": {"full": False}})
 
     assert response["ok"] is True
     assert response["result"]["exit_code"] == 2
     assert response["result"]["fixes"][0]["command"] == "pip install torch"
+
+
+def test_mcp_stub_doctor_summary_uses_shared_summary_shape(monkeypatch):
+    """The MCP stub should expose doctor summary findings with the shared schema."""
+    issues = [DiagnosticIssue("Torch", "FAIL - missing", "critical", "pip install torch")]
+
+    monkeypatch.setattr(
+        "mlenvdoctor.mcp.diagnose_env", lambda full=False, show_header=False: issues
+    )
+
+    response = _handle_request({"tool": "doctor_summary", "arguments": {"full": False}})
+
+    assert response["ok"] is True
+    assert response["result"]["schema_version"] == "1.0"
+    assert response["result"]["doctor_summary"][0]["problem"] == "Torch"
+    assert "confidence" in response["result"]["doctor_summary"][0]

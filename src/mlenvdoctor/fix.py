@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from .config import load_config
 from .constants import DEFAULT_REQUIREMENTS_FILE
-from .diagnose import DiagnosticIssue, diagnose_env
+from .diagnose import DiagnosticIssue, DoctorFinding, diagnose_env, summarize_for_doctor
 from .icons import icon_wrench
 from .utils import (
     check_command_exists,
@@ -59,6 +59,7 @@ class FixAction:
 
     kind: str
     description: str
+    risk: str = "low"
     command: Optional[List[str]] = None
     output_path: Optional[Path] = None
     details: str = ""
@@ -70,10 +71,88 @@ class FixResult:
 
     success: bool
     actions: List[FixAction] = field(default_factory=list)
+    reasons: List[str] = field(default_factory=list)
+    selected_stack: str = "trl-peft"
     executed_actions: List[str] = field(default_factory=list)
     verification_issues: List[DiagnosticIssue] = field(default_factory=list)
+    verification_summary: Optional["FixVerificationSummary"] = None
     created_paths: List[Path] = field(default_factory=list)
     message: str = ""
+
+
+@dataclass
+class FixVerificationSummary:
+    """Summarize before/after diagnostic state for a fix attempt."""
+
+    before_critical: int
+    after_critical: int
+    before_warning: int
+    after_warning: int
+    resolved_critical: List[str] = field(default_factory=list)
+    remaining_critical: List[str] = field(default_factory=list)
+    remaining_warning: List[str] = field(default_factory=list)
+
+
+def _count_issues(issues: List[DiagnosticIssue], *, severity: str) -> int:
+    """Count failing or warning issues for a given severity."""
+    if severity == "critical":
+        return sum(1 for issue in issues if issue.severity == "critical" and "FAIL" in issue.status)
+    return sum(
+        1
+        for issue in issues
+        if issue.severity == "warning" and issue.status.startswith(("WARN", "FAIL"))
+    )
+
+
+def _build_verification_summary(
+    before_issues: List[DiagnosticIssue], after_issues: List[DiagnosticIssue]
+) -> FixVerificationSummary:
+    """Create a before/after verification summary."""
+    before_critical_names = {
+        issue.name
+        for issue in before_issues
+        if issue.severity == "critical" and "FAIL" in issue.status
+    }
+    after_critical_names = {
+        issue.name
+        for issue in after_issues
+        if issue.severity == "critical" and "FAIL" in issue.status
+    }
+    after_warning_names = [
+        issue.name
+        for issue in after_issues
+        if issue.severity == "warning" and issue.status.startswith(("WARN", "FAIL"))
+    ]
+
+    return FixVerificationSummary(
+        before_critical=_count_issues(before_issues, severity="critical"),
+        after_critical=_count_issues(after_issues, severity="critical"),
+        before_warning=_count_issues(before_issues, severity="warning"),
+        after_warning=_count_issues(after_issues, severity="warning"),
+        resolved_critical=sorted(before_critical_names - after_critical_names),
+        remaining_critical=sorted(after_critical_names),
+        remaining_warning=after_warning_names,
+    )
+
+
+def recommend_stack_from_findings(
+    requested_stack: str,
+    findings: List[DoctorFinding],
+) -> str:
+    """Choose a practical stack based on grouped root causes."""
+    if requested_stack != "trl-peft":
+        return requested_stack
+
+    finding_ids = {finding.check_id for finding in findings}
+    if "root_ml_stack_dependencies" in finding_ids:
+        return "llm-training"
+    if {
+        "root_pytorch_missing",
+        "root_pytorch_cpu_only_build",
+        "root_pytorch_cuda_mismatch",
+    } & finding_ids:
+        return "minimal"
+    return requested_stack
 
 
 def get_stack_requirements(stack: str) -> list[str]:
@@ -97,8 +176,7 @@ def generate_requirements_txt(
         if torch.cuda.is_available():
             content = "# Install CUDA-enabled PyTorch first if needed\n"
             content += (
-                "# pip install torch --index-url "
-                "https://download.pytorch.org/whl/cu124\n\n"
+                "# pip install torch --index-url " "https://download.pytorch.org/whl/cu124\n\n"
             )
         else:
             content = "# Install the appropriate PyTorch build for your machine\n\n"
@@ -177,8 +255,12 @@ def install_requirements(
     try:
         pip_check = run_command([python_cmd, "-m", "pip", "--version"], timeout=60)
         if pip_check.returncode != 0:
-            print_warning(f"pip is not available in {python_cmd}. Attempting to bootstrap it with ensurepip...")
-            ensurepip_result = run_command([python_cmd, "-m", "ensurepip", "--upgrade"], timeout=300)
+            print_warning(
+                f"pip is not available in {python_cmd}. Attempting to bootstrap it with ensurepip..."
+            )
+            ensurepip_result = run_command(
+                [python_cmd, "-m", "ensurepip", "--upgrade"], timeout=300
+            )
             if ensurepip_result.returncode != 0:
                 print_error(
                     "Unable to bootstrap pip automatically. "
@@ -234,13 +316,32 @@ def plan_fixes(
     use_conda: bool,
     create_venv: bool,
     stack: str,
+    doctor_findings: Optional[List[DoctorFinding]] = None,
     requirements_output: str = DEFAULT_REQUIREMENTS_FILE,
     conda_output: str = "environment-mlenvdoctor.yml",
     venv_path: str = ".venv",
 ) -> List[FixAction]:
     """Turn diagnostics into a predictable fix plan."""
-    critical_issues = [issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status]
-    actionable_library_issue = any(issue.category in {"dependencies", "pytorch"} for issue in critical_issues)
+    findings = doctor_findings if doctor_findings is not None else summarize_for_doctor(issues)
+    critical_issues = [
+        issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status
+    ]
+    actionable_library_issue = any(
+        issue.category in {"dependencies", "pytorch"} for issue in critical_issues
+    )
+    fixable_root_causes = {
+        "root_pytorch_missing",
+        "root_pytorch_cpu_only_build",
+        "root_pytorch_cuda_mismatch",
+        "root_ml_stack_dependencies",
+        "root_tensorflow_gpu_path",
+        "root_jax_backend",
+    }
+    root_cause_requires_requirements = any(
+        finding.check_id in fixable_root_causes
+        or finding.category in {"dependencies", "pytorch", "tensorflow", "jax"}
+        for finding in findings
+    )
 
     actions: List[FixAction] = []
     if create_venv:
@@ -248,6 +349,7 @@ def plan_fixes(
             FixAction(
                 kind="create_venv",
                 description=f"Create virtual environment at {venv_path}",
+                risk="low",
                 output_path=Path(venv_path),
             )
         )
@@ -257,17 +359,24 @@ def plan_fixes(
             FixAction(
                 kind="write_conda",
                 description=f"Generate Conda environment file for stack '{stack}'",
+                risk="low",
                 output_path=Path(conda_output),
             )
         )
         return actions
 
-    if critical_issues or actionable_library_issue:
+    if root_cause_requires_requirements or critical_issues or actionable_library_issue:
         actions.append(
             FixAction(
                 kind="write_requirements",
                 description=f"Generate requirements file for stack '{stack}'",
+                risk="low",
                 output_path=Path(requirements_output),
+                details=(
+                    "Generated from grouped root-cause findings"
+                    if root_cause_requires_requirements
+                    else "Generated from actionable raw issues"
+                ),
             )
         )
 
@@ -327,30 +436,61 @@ def auto_fix(
         apply = True
 
     issues = diagnose_env(full=False, show_header=False)
+    doctor_findings = summarize_for_doctor(issues)
+    selected_stack = recommend_stack_from_findings(stack, doctor_findings)
     actions = plan_fixes(
         issues,
         use_conda=use_conda,
         create_venv=create_venv,
-        stack=stack,
+        stack=selected_stack,
+        doctor_findings=doctor_findings,
     )
 
-    critical_issues = [issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status]
+    critical_issues = [
+        issue for issue in issues if issue.severity == "critical" and "FAIL" in issue.status
+    ]
 
     if not critical_issues and not actions:
         print_success("No critical issues found! Environment looks good.")
-        return FixResult(success=True, verification_issues=issues, message="No fix actions required")
+        return FixResult(
+            success=True,
+            verification_issues=issues,
+            message="No fix actions required",
+            reasons=[finding.problem for finding in doctor_findings],
+            selected_stack=selected_stack,
+        )
 
     if not actions:
         print_info("No automated fix actions are available for the current issues.")
-        return FixResult(success=True, verification_issues=issues, message="No automated actions available")
+        return FixResult(
+            success=True,
+            verification_issues=issues,
+            message="No automated actions available",
+            reasons=[finding.problem for finding in doctor_findings],
+            selected_stack=selected_stack,
+        )
+
+    if doctor_findings:
+        console.print("[bold]Why these actions are being planned:[/bold]")
+        for finding in doctor_findings[:3]:
+            console.print(f"[yellow]- {finding.problem}[/yellow]")
+            console.print(f"  Likely cause: {finding.likely_cause}")
 
     console.print(f"[yellow]Planned {len(actions)} fix action(s)[/yellow]")
+    console.print(f"[cyan]Selected stack: {selected_stack}[/cyan]")
     for action in actions:
-        console.print(f"[cyan]- {action.description}[/cyan]")
+        console.print(f"[cyan]- [{action.risk} risk] {action.description}[/cyan]")
 
     if dry_run:
         print_info("Dry run only. No changes were applied.")
-        return FixResult(success=True, actions=actions, verification_issues=issues, message="Dry run complete")
+        return FixResult(
+            success=True,
+            actions=actions,
+            verification_issues=issues,
+            message="Dry run complete",
+            reasons=[finding.problem for finding in doctor_findings],
+            selected_stack=selected_stack,
+        )
 
     should_apply = apply
     if not apply and not yes:
@@ -360,7 +500,14 @@ def auto_fix(
 
     if not should_apply:
         print_info("No changes applied.")
-        return FixResult(success=True, actions=actions, verification_issues=issues, message="User skipped apply")
+        return FixResult(
+            success=True,
+            actions=actions,
+            verification_issues=issues,
+            message="User skipped apply",
+            reasons=[finding.problem for finding in doctor_findings],
+            selected_stack=selected_stack,
+        )
 
     executed_actions: List[str] = []
     created_paths: List[Path] = []
@@ -368,7 +515,11 @@ def auto_fix(
     success = True
 
     for action in actions:
-        ok, output_path, description = _execute_action(action, stack=stack, python_executable=venv_python)
+        ok, output_path, description = _execute_action(
+            action,
+            stack=selected_stack,
+            python_executable=venv_python,
+        )
         executed_actions.append(description)
         if output_path is not None:
             created_paths.append(output_path)
@@ -383,28 +534,42 @@ def auto_fix(
         install_action = FixAction(
             kind="install_requirements",
             description=f"Install dependencies from {requirements_path}",
+            risk="medium",
             output_path=requirements_path,
         )
         ok, _, description = _execute_action(
             install_action,
-            stack=stack,
+            stack=selected_stack,
             python_executable=venv_python,
         )
         executed_actions.append(description)
         success = success and ok
 
     verification_issues: List[DiagnosticIssue] = []
+    verification_summary: Optional[FixVerificationSummary] = None
     if success and verify:
         verification_issues = diagnose_env(full=False, show_header=False)
+        verification_summary = _build_verification_summary(issues, verification_issues)
 
     if success:
         print_success("Auto-fix completed.")
-        if verification_issues:
-            remaining_critical = [
-                issue for issue in verification_issues if issue.severity == "critical" and "FAIL" in issue.status
-            ]
-            if remaining_critical:
-                print_warning("Verification found remaining critical issues. Review the updated diagnostics.")
+        if verification_summary is not None:
+            console.print(
+                "[bold]Verification summary:[/bold] "
+                f"critical {verification_summary.before_critical} -> {verification_summary.after_critical}, "
+                f"warnings {verification_summary.before_warning} -> {verification_summary.after_warning}"
+            )
+            if verification_summary.resolved_critical:
+                console.print(
+                    f"[green]Resolved critical issues: {', '.join(verification_summary.resolved_critical)}[/green]"
+                )
+            if verification_summary.remaining_critical:
+                print_warning(
+                    "Verification found remaining critical issues. Review the updated diagnostics."
+                )
+                console.print(
+                    f"[yellow]Remaining critical issues: {', '.join(verification_summary.remaining_critical)}[/yellow]"
+                )
             else:
                 print_success("Verification completed without critical issues.")
     else:
@@ -413,8 +578,11 @@ def auto_fix(
     return FixResult(
         success=success,
         actions=actions,
+        reasons=[finding.problem for finding in doctor_findings],
+        selected_stack=selected_stack,
         executed_actions=executed_actions,
         verification_issues=verification_issues,
+        verification_summary=verification_summary,
         created_paths=created_paths,
         message="Auto-fix completed" if success else "Auto-fix failed",
     )

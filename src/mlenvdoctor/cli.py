@@ -14,8 +14,8 @@ from .diagnose import diagnose_env, get_fix_commands, print_diagnostic_table, su
 from .dockerize import generate_dockerfile, generate_service_template
 from .export import build_export_data, export_csv, export_html, export_json, get_exit_code
 from .fix import auto_fix, get_stack_requirements
-from .mcp import serve_mcp
-from .gpu import benchmark_gpu_ops, smoke_test_lora, test_model as gpu_test_model
+from .gpu import benchmark_gpu_ops, smoke_test_lora
+from .gpu import test_model as gpu_test_model
 from .icons import (
     icon_check,
     icon_cross,
@@ -26,6 +26,7 @@ from .icons import (
     icon_wrench,
 )
 from .logger import get_default_log_file, setup_logger
+from .mcp import serve_mcp
 from .utils import console
 from .validators import validate_log_level
 
@@ -67,15 +68,35 @@ stack_app = typer.Typer(help="Recommended dependency stacks.")
 def _print_doctor_summary(issues) -> None:
     """Print prioritized, non-overlapping `doctor` output."""
     findings = summarize_for_doctor(issues)
+    runtime_issue = next(
+        (issue for issue in issues if issue.check_id == "accelerator_backend"), None
+    )
+    if runtime_issue is not None:
+        platform = runtime_issue.metadata.get("platform", "unknown")
+        backend = runtime_issue.metadata.get("backend", "unknown")
+        nvidia_visible = runtime_issue.metadata.get("nvidia_visible")
+        nvidia_label = "yes" if nvidia_visible else "no"
+        console.print(
+            "[bold cyan]Detected runtime:[/bold cyan] "
+            f"platform={platform}, backend={backend}, nvidia_tooling={nvidia_label}"
+        )
+        console.print()
+
     if not findings:
         console.print(f"[bold green]{icon_check()} No actionable problems detected.[/bold green]")
-        console.print("[green]Your next step: proceed, or run `mlenvdoctor diagnose` for full evidence.[/green]")
+        console.print(
+            "[green]Your next step: proceed, or run `mlenvdoctor diagnose` for full evidence.[/green]"
+        )
         return
 
     console.print(f"[bold blue]{icon_search()} Doctor Summary[/bold blue]\n")
-    for index, finding in enumerate(findings, start=1):
+    displayed_findings = findings[:3]
+    for index, finding in enumerate(displayed_findings, start=1):
         severity_color = "red" if finding.severity == "critical" else "yellow"
-        console.print(f"[bold {severity_color}]{index}. Problem: {finding.problem}[/bold {severity_color}]")
+        console.print(
+            f"[bold {severity_color}]{index}. Problem: {finding.problem}[/bold {severity_color}]"
+        )
+        console.print(f"Confidence: {finding.confidence}")
         console.print(f"Likely cause: {finding.likely_cause}")
         console.print(f"Best next fix: {finding.best_fix}")
         console.print("Verify:")
@@ -83,7 +104,21 @@ def _print_doctor_summary(issues) -> None:
             console.print(f"  [cyan]{step}[/cyan]")
         if finding.evidence:
             console.print(f"Evidence: {finding.evidence[0]}")
+        if finding.linked_checks:
+            console.print(f"Linked checks: {', '.join(finding.linked_checks)}")
         console.print()
+    if len(findings) > len(displayed_findings):
+        console.print(
+            f"[yellow]Showing top {len(displayed_findings)} findings. "
+            "Run `mlenvdoctor diagnose` for full detailed evidence.[/yellow]"
+        )
+    top_finding = findings[0]
+    verify_hint = (
+        top_finding.verify_steps[0] if top_finding.verify_steps else "mlenvdoctor diagnose"
+    )
+    console.print()
+    console.print(f"[bold green]Do this next:[/bold green] {top_finding.best_fix}")
+    console.print(f"[green]Then verify with:[/green] {verify_hint}")
 
 
 def version_callback(value: bool):
@@ -140,12 +175,8 @@ def diagnose(
         "--json",
         help="Export results to JSON file, or use '-' to print machine-readable JSON to stdout",
     ),
-    csv_output: Optional[Path] = typer.Option(
-        None, "--csv", help="Export results to CSV file"
-    ),
-    html_output: Optional[Path] = typer.Option(
-        None, "--html", help="Export results to HTML file"
-    ),
+    csv_output: Optional[Path] = typer.Option(None, "--csv", help="Export results to CSV file"),
+    html_output: Optional[Path] = typer.Option(None, "--html", help="Export results to HTML file"),
 ):
     f"""
     {icon_search()} Diagnose your environment with detailed evidence.
@@ -163,7 +194,9 @@ def diagnose(
     # Export to formats if requested
     if json_output:
         if json_to_stdout:
-            typer.echo(json.dumps(build_export_data(issues, include_metadata=True), ensure_ascii=False))
+            typer.echo(
+                json.dumps(build_export_data(issues, include_metadata=True), ensure_ascii=False)
+            )
         else:
             export_json(issues, Path(json_output))
             console.print(f"[green]{icon_check()} Exported to {json_output}[/green]")
@@ -218,7 +251,7 @@ def doctor(
         for finding in findings:
             verify = finding.verify_steps[0] if finding.verify_steps else "mlenvdoctor diagnose"
             typer.echo(
-                f"ISSUE {finding.problem} | cause={finding.likely_cause} | "
+                f"ISSUE {finding.problem} | confidence={finding.confidence} | cause={finding.likely_cause} | "
                 f"fix={finding.best_fix} | verify={verify}"
             )
     else:
@@ -294,6 +327,16 @@ def fix(
         "--dry-run",
         help="Show the planned fix actions without writing files or installing packages",
     ),
+    plan: bool = typer.Option(
+        False,
+        "--plan",
+        help="Show a risk-labeled fix plan without applying changes",
+    ),
+    verify_only: bool = typer.Option(
+        False,
+        "--verify",
+        help="Run verification checks and show the current doctor summary without applying fixes",
+    ),
 ):
     f"""
     {icon_wrench()} Auto-fix environment issues and generate requirements.
@@ -301,6 +344,17 @@ def fix(
     Generates requirements.txt or conda environment file based on detected issues.
     Optionally creates a virtual environment and installs dependencies.
     """
+    if verify_only and (apply or dry_run or plan):
+        raise typer.BadParameter("--verify cannot be combined with --apply, --dry-run, or --plan")
+
+    if verify_only:
+        issues = diagnose_env(full=False)
+        _print_doctor_summary(issues)
+        raise typer.Exit(get_exit_code(issues))
+
+    if plan:
+        dry_run = True
+
     result = auto_fix(
         use_conda=conda,
         create_venv=venv,
@@ -311,11 +365,15 @@ def fix(
     )
     if result.success:
         console.print()
-        console.print(f"[bold green]{icon_check()} Auto-fix completed![/bold green]")
+        completed_label = "Fix plan generated" if dry_run else "Auto-fix completed"
+        console.print(f"[bold green]{icon_check()} {completed_label}![/bold green]")
         if result.created_paths:
             for path in result.created_paths:
                 console.print(f"[cyan]Created: {path}[/cyan]")
-        console.print("[yellow]Run 'mlenvdoctor diagnose' to verify fixes[/yellow]")
+        if dry_run:
+            console.print("[yellow]Run 'mlenvdoctor fix --apply' to execute this plan[/yellow]")
+        else:
+            console.print("[yellow]Run 'mlenvdoctor fix --verify' to re-check root causes[/yellow]")
     else:
         raise typer.Exit(1)
 
@@ -409,7 +467,9 @@ def test_model_cmd(
     success = gpu_test_model(model_name=model)
     if success:
         console.print()
-        console.print(f"[bold green]{icon_check()} Model test passed! Ready for fine-tuning.[/bold green]")
+        console.print(
+            f"[bold green]{icon_check()} Model test passed! Ready for fine-tuning.[/bold green]"
+        )
     else:
         console.print()
         console.print(f"[bold red]{icon_cross()} Model test failed. Check diagnostics.[/bold red]")
@@ -427,7 +487,9 @@ def smoke_test():
     success = smoke_test_lora()
     if success:
         console.print()
-        console.print(f"[bold green]{icon_check()} Smoke test passed! Environment is ready.[/bold green]")
+        console.print(
+            f"[bold green]{icon_check()} Smoke test passed! Environment is ready.[/bold green]"
+        )
     else:
         console.print()
         console.print(

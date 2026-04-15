@@ -5,7 +5,7 @@ import sys
 from typing import Any, Dict
 
 from .diagnose import diagnose_env, get_fix_commands
-from .export import build_export_data
+from .export import DOCTOR_SUMMARY_SCHEMA_VERSION, build_export_data
 
 
 def _handle_request(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -32,10 +32,24 @@ def _handle_request(payload: Dict[str, Any]) -> Dict[str, Any]:
             },
         }
 
+    if tool_name == "doctor_summary":
+        issues = diagnose_env(full=bool(arguments.get("full", False)), show_header=False)
+        return {
+            "ok": True,
+            "tool": "doctor_summary",
+            "result": {
+                "schema_version": DOCTOR_SUMMARY_SCHEMA_VERSION,
+                "doctor_summary": build_export_data(issues, include_metadata=True)[
+                    "doctor_summary"
+                ],
+                "exit_code": build_export_data(issues, include_metadata=False)["exit_code"],
+            },
+        }
+
     return {
         "ok": False,
         "error": f"Unknown tool: {tool_name}",
-        "available_tools": ["diagnose", "get_fixes"],
+        "available_tools": ["diagnose", "get_fixes", "doctor_summary"],
     }
 
 

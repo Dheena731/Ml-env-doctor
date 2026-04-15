@@ -40,6 +40,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Check Windows-incompatible filenames
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          bad_paths = []
+          for path in Path(".").rglob("*"):
+              if not path.is_file():
+                  continue
+              rel = path.as_posix()
+              if ":" in rel:
+                  bad_paths.append(rel)
+          if bad_paths:
+              print("Found Windows-incompatible file paths:")
+              for item in bad_paths:
+                  print(f" - {item}")
+              raise SystemExit(1)
+          print("No Windows-incompatible file paths found.")
+          PY
+
       - name: Check formatting
         run: python -m black --check src tests
 

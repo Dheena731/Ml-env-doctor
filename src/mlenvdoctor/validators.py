@@ -39,7 +39,9 @@ def validate_model_name(model_name: str) -> str:
     return model_name.lower()
 
 
-def validate_file_path(file_path: Path, must_exist: bool = False, must_be_file: bool = False) -> Path:
+def validate_file_path(
+    file_path: Path, must_exist: bool = False, must_be_file: bool = False
+) -> Path:
     """
     Validate and sanitize file path.
 
@@ -178,7 +180,9 @@ def sanitize_command(cmd: list[str]) -> list[str]:
     return sanitized
 
 
-def validate_timeout(timeout: Optional[int], min_timeout: int = 1, max_timeout: int = 3600) -> Optional[int]:
+def validate_timeout(
+    timeout: Optional[int], min_timeout: int = 1, max_timeout: int = 3600
+) -> Optional[int]:
     """
     Validate timeout value.
 

@@ -14,6 +14,15 @@ runner = CliRunner()
 def _sample_issues() -> list[DiagnosticIssue]:
     return [
         DiagnosticIssue(
+            name="Accelerator Backend",
+            status="PASS - backend=cuda",
+            severity="info",
+            fix="",
+            check_id="accelerator_backend",
+            category="platform",
+            metadata={"platform": "linux", "backend": "cuda", "nvidia_visible": True},
+        ),
+        DiagnosticIssue(
             name="PyTorch CUDA",
             status="FAIL - CUDA not available",
             severity="critical",
@@ -64,7 +73,8 @@ def test_diagnose_json_stdout(monkeypatch):
     assert result.exit_code == 2
     payload = json.loads(result.stdout)
     assert "issues" in payload
-    assert payload["issues"][0]["check_id"] == "pytorch_cuda"
+    assert "doctor_summary" in payload
+    assert any(issue["check_id"] == "pytorch_cuda" for issue in payload["issues"])
 
 
 def test_json_export(monkeypatch, tmp_path: Path):
@@ -104,7 +114,9 @@ def test_html_export(monkeypatch, tmp_path: Path):
 def test_logging(tmp_path: Path):
     """Test logging functionality."""
     log_file = tmp_path / "test.log"
-    result = runner.invoke(app, ["--log-file", str(log_file), "--log-level", "INFO", "diagnose", "--json", "-"])
+    result = runner.invoke(
+        app, ["--log-file", str(log_file), "--log-level", "INFO", "diagnose", "--json", "-"]
+    )
     assert result.exit_code in {0, 1, 2}
     assert log_file.exists()
 
@@ -129,11 +141,15 @@ def test_fix_command():
     """Test fix command."""
     result = runner.invoke(app, ["fix", "--help"])
     assert result.exit_code == 0
-    assert "auto-fix" in result.stdout.lower()
+    assert "--dry-run" in result.stdout
+    assert "--plan" in result.stdout
+    assert "--verify" in result.stdout
+    assert "--apply" in result.stdout
 
 
 def test_fix_dry_run(monkeypatch):
     """Dry-run fix mode should not prompt."""
+
     class Result:
         success = True
         created_paths = []
@@ -164,10 +180,46 @@ def test_doctor_human_output_is_summary_not_table(monkeypatch):
     monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 2
+    assert "Detected runtime:" in result.stdout
+    assert "platform=linux" in result.stdout
+    assert "backend=cuda" in result.stdout
+    assert "nvidia_tooling=yes" in result.stdout
     assert "Problem: PyTorch CUDA" in result.stdout
+    assert "Confidence:" in result.stdout
     assert "Likely cause:" in result.stdout
     assert "Verify:" in result.stdout
+    assert "Linked checks:" in result.stdout
+    assert "Do this next:" in result.stdout
+    assert "Then verify with:" in result.stdout
     assert "Diagnostic Results" not in result.stdout
+
+
+def test_fix_verify_mode_runs_diagnostics_without_auto_fix(monkeypatch):
+    """Verify mode should bypass auto-fix and print triage output."""
+    calls = {"auto_fix": 0}
+
+    class Result:
+        success = True
+        created_paths = []
+
+    def fake_auto_fix(**kwargs):
+        calls["auto_fix"] += 1
+        return Result()
+
+    monkeypatch.setattr("mlenvdoctor.cli.auto_fix", fake_auto_fix)
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+
+    result = runner.invoke(app, ["fix", "--verify"])
+    assert result.exit_code == 2
+    assert "Doctor Summary" in result.stdout
+    assert calls["auto_fix"] == 0
+
+
+def test_fix_verify_rejects_conflicting_modes():
+    """Verify mode should reject apply/plan combinations."""
+    result = runner.invoke(app, ["fix", "--verify", "--apply"])
+    assert result.exit_code != 0
+    assert "--verify cannot be combined" in result.output
 
 
 def test_stack_command():
@@ -181,7 +233,7 @@ def test_invalid_log_level():
     """Test that invalid log level is rejected."""
     result = runner.invoke(app, ["--log-level", "INVALID", "diagnose"])
     assert result.exit_code != 0
-    assert "Invalid log level" in result.stdout or "Invalid value" in result.stdout
+    assert "Invalid log level" in result.output or "Invalid value" in result.output
 
 
 def test_help_survives_log_file_permission_issue(tmp_path: Path):

@@ -3,6 +3,8 @@
 from mlenvdoctor import diagnose as diagnose_module
 from mlenvdoctor.diagnose import (
     DiagnosticIssue,
+    check_accelerator_backend,
+    check_cuda_driver,
     check_jax_flax,
     check_tensorflow_keras,
     diagnose_env,
@@ -131,7 +133,9 @@ def test_check_tensorflow_keras_installed(monkeypatch):
 
     assert any(issue.name == "TensorFlow" and issue.status.startswith("PASS") for issue in issues)
     assert any(issue.name == "Keras" and issue.status.startswith("PASS") for issue in issues)
-    assert any(issue.name == "TensorFlow Execution" and issue.status.startswith("PASS") for issue in issues)
+    assert any(
+        issue.name == "TensorFlow Execution" and issue.status.startswith("PASS") for issue in issues
+    )
 
 
 def test_check_jax_flax_cpu_warning(monkeypatch):
@@ -180,12 +184,97 @@ def test_check_jax_flax_cpu_warning(monkeypatch):
 
     assert any(issue.name == "JAX" and issue.status.startswith("WARN") for issue in issues)
     assert any(issue.name == "Flax" and issue.status.startswith("PASS") for issue in issues)
-    assert any(issue.name == "JAX Execution" and issue.status.startswith("PASS") for issue in issues)
+    assert any(
+        issue.name == "JAX Execution" and issue.status.startswith("PASS") for issue in issues
+    )
+
+
+def test_check_cuda_driver_is_platform_aware_on_macos(monkeypatch):
+    """Missing nvidia-smi should be informational on macOS paths."""
+    monkeypatch.setattr(diagnose_module, "check_command_exists", lambda cmd: False)
+    monkeypatch.setattr(diagnose_module, "_platform_hint", lambda: "macos")
+
+    issues = check_cuda_driver()
+
+    assert len(issues) == 1
+    assert issues[0].severity == "info"
+    assert issues[0].status.startswith("INFO")
+
+
+def test_check_cuda_driver_warns_for_wsl_passthrough(monkeypatch):
+    """Missing nvidia-smi in WSL should point to passthrough guidance."""
+    monkeypatch.setattr(diagnose_module, "check_command_exists", lambda cmd: False)
+    monkeypatch.setattr(diagnose_module, "_platform_hint", lambda: "wsl2")
+
+    issues = check_cuda_driver()
+
+    assert len(issues) == 1
+    assert issues[0].severity == "warning"
+    assert "WSL" in issues[0].status
+
+
+def test_check_accelerator_backend_warns_when_wsl_reports_cpu_with_nvidia(monkeypatch):
+    """Backend detection should flag WSL CPU fallback when NVIDIA tooling is visible."""
+
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return False
+
+    class FakeBackends:
+        mps = None
+
+    class FakeTorch:
+        cuda = FakeCuda()
+        backends = FakeBackends()
+
+    monkeypatch.setattr(diagnose_module, "torch", FakeTorch)
+    monkeypatch.setattr(diagnose_module, "_platform_hint", lambda: "wsl2")
+    monkeypatch.setattr(diagnose_module, "check_command_exists", lambda cmd: cmd == "nvidia-smi")
+
+    issues = check_accelerator_backend()
+
+    assert len(issues) == 1
+    assert issues[0].severity == "warning"
+    assert issues[0].status.startswith("WARN")
+    assert issues[0].check_id == "accelerator_backend"
+
+
+def test_summarize_for_doctor_includes_accelerator_backend_finding():
+    """Backend warnings should surface as doctor-level root-cause findings."""
+    issues = [
+        DiagnosticIssue(
+            name="Accelerator Backend",
+            status="WARN - backend=cpu on Windows with NVIDIA tooling",
+            severity="warning",
+            fix="Use CUDA-enabled PyTorch",
+            check_id="accelerator_backend",
+            category="platform",
+            likely_cause="Runtime backend mismatch",
+            recommendation="Install CUDA build",
+            verify_steps=['python -c "import torch; print(torch.cuda.is_available())"'],
+            confidence="medium",
+        )
+    ]
+
+    findings = summarize_for_doctor(issues)
+
+    assert findings
+    assert findings[0].check_id == "root_accelerator_backend"
+    assert findings[0].category == "platform"
 
 
 def test_summarize_for_doctor_prioritizes_actionable_issues():
-    """Doctor summaries should include likely cause, fix, and verification."""
+    """Doctor summaries should include grouped root-cause style findings."""
     issues = [
+        DiagnosticIssue(
+            name="NVIDIA GPU Driver",
+            status="PASS - CUDA 12.4",
+            severity="info",
+            fix="",
+            check_id="cuda_driver",
+            category="gpu",
+        ),
         DiagnosticIssue(
             name="PyTorch CUDA",
             status="FAIL - CUDA not available",
@@ -207,6 +296,65 @@ def test_summarize_for_doctor_prioritizes_actionable_issues():
     findings = summarize_for_doctor(issues)
 
     assert len(findings) == 1
-    assert findings[0].problem == "PyTorch CUDA"
-    assert findings[0].best_fix == "pip install torch"
+    assert findings[0].problem == "PyTorch cannot use the available GPU"
+    assert findings[0].confidence == "high"
     assert findings[0].verify_steps
+    assert "pytorch_cuda" in findings[0].linked_checks
+
+
+def test_summarize_for_doctor_distinguishes_cpu_only_pytorch_build():
+    """Doctor should distinguish a CPU-only torch build from a generic mismatch."""
+    issues = [
+        DiagnosticIssue(
+            name="NVIDIA GPU Driver",
+            status="PASS - CUDA 12.4",
+            severity="info",
+            fix="",
+            check_id="cuda_driver",
+            category="gpu",
+        ),
+        DiagnosticIssue(
+            name="PyTorch CUDA",
+            status="FAIL - CUDA not available",
+            severity="critical",
+            fix="pip install torch",
+            check_id="pytorch_cuda",
+            category="pytorch",
+            metadata={"torch_cuda_build": None},
+        ),
+    ]
+
+    findings = summarize_for_doctor(issues)
+
+    assert (
+        findings[0].problem == "PyTorch is installed as a CPU-only build on a GPU-capable machine"
+    )
+    assert findings[0].check_id == "root_pytorch_cpu_only_build"
+
+
+def test_summarize_for_doctor_groups_dependency_stack_issues():
+    """Multiple dependency issues should collapse into one stack-level finding."""
+    issues = [
+        DiagnosticIssue(
+            name="transformers",
+            status="FAIL - Not installed",
+            severity="critical",
+            fix="pip install transformers>=4.44.0",
+            check_id="library_transformers",
+            category="dependencies",
+        ),
+        DiagnosticIssue(
+            name="accelerate",
+            status="WARN - Old version (0.9.0)",
+            severity="warning",
+            fix="pip install --upgrade accelerate>=1.0.0",
+            check_id="library_accelerate",
+            category="dependencies",
+        ),
+    ]
+
+    findings = summarize_for_doctor(issues)
+
+    assert findings[0].problem == "The core ML training dependency stack is incomplete or outdated"
+    assert findings[0].category == "dependencies"
+    assert "library_transformers" in findings[0].linked_checks
