@@ -52,6 +52,7 @@ class DiagnosticIssue:
     verify_steps: List[str] = field(default_factory=list)
     confidence: str = "medium"
     evidence: List[str] = field(default_factory=list)
+    mismatch_code: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_row(self) -> Tuple[str, str, str, str]:
@@ -111,6 +112,7 @@ def make_issue(
     verify_steps: Optional[List[str]] = None,
     confidence: str = "medium",
     evidence: Optional[List[str]] = None,
+    mismatch_code: str = "",
     metadata: Optional[Dict[str, Any]] = None,
 ) -> DiagnosticIssue:
     """Create a normalized diagnostic issue."""
@@ -127,6 +129,7 @@ def make_issue(
         verify_steps=verify_steps or [],
         confidence=confidence,
         evidence=evidence or [],
+        mismatch_code=mismatch_code,
         metadata=metadata or {},
     )
 
@@ -141,6 +144,13 @@ def _is_version_at_least(current: str, minimum: str) -> Optional[bool]:
 def _summarize_exception(exc: Exception) -> str:
     """Return a short exception summary for diagnostics."""
     return f"{type(exc).__name__}: {exc}"
+
+
+COMPATIBILITY_BASELINES: Dict[str, Dict[str, str]] = {
+    "tensorflow_windows": {"max_recommended_python": "3.11"},
+    "tensorflow_general": {"max_recommended_python": "3.12"},
+    "pytorch_cuda": {"recommended_cuda": "12.4"},
+}
 
 
 def _default_verify_steps(issue: DiagnosticIssue) -> List[str]:
@@ -552,6 +562,87 @@ def _root_cause_findings(issues: List[DiagnosticIssue]) -> List[DoctorFinding]:
         )
 
     return findings
+
+
+def _compatibility_matrix_issues(issues: List[DiagnosticIssue]) -> List[DiagnosticIssue]:
+    """Infer compatibility mismatches using cross-check rules."""
+    inferred: List[DiagnosticIssue] = []
+    platform_hint = _platform_hint()
+    py_issue = next((issue for issue in issues if issue.check_id == "python_runtime"), None)
+    py_version = ""
+    if py_issue is not None:
+        py_version = py_issue.metadata.get("current_version", "")
+        if not py_version and "PASS -" in py_issue.status:
+            py_version = py_issue.status.replace("PASS -", "").strip()
+
+    tf_issue = next((issue for issue in issues if issue.check_id == "tensorflow_runtime"), None)
+    if tf_issue is not None and py_version and py_version != "unknown":
+        if platform_hint == "windows":
+            max_py = COMPATIBILITY_BASELINES["tensorflow_windows"]["max_recommended_python"]
+            py_ok = _is_version_at_least(max_py, py_version)
+            if py_ok is False:
+                inferred.append(
+                    make_issue(
+                        name="Compatibility Matrix",
+                        status=(
+                            f"WARN - Python {py_version} may be ahead of the most stable "
+                            f"TensorFlow path on Windows"
+                        ),
+                        severity="warning",
+                        fix=(
+                            f"Use Python <= {max_py} for the most stable Windows TensorFlow setup, "
+                            "or use WSL2 for CUDA-based TensorFlow workflows."
+                        ),
+                        check_id="compatibility_matrix",
+                        category="compatibility",
+                        details="Detected TensorFlow on Windows with a newer Python runtime.",
+                        confidence="medium",
+                        mismatch_code="PYTHON_TF_COMPAT_WARNING",
+                        evidence=[f"platform={platform_hint}", f"python={py_version}"],
+                        metadata={"platform": platform_hint, "python_version": py_version},
+                    )
+                )
+
+    cuda_issue = next((issue for issue in issues if issue.check_id == "cuda_driver"), None)
+    torch_cuda_issue = next((issue for issue in issues if issue.check_id == "pytorch_cuda"), None)
+    if (
+        cuda_issue is not None
+        and torch_cuda_issue is not None
+        and cuda_issue.status.startswith("PASS")
+        and torch_cuda_issue.status.startswith("FAIL")
+    ):
+        torch_cuda_build = torch_cuda_issue.metadata.get("torch_cuda_build")
+        mismatch_code = "PT_CUDA_RUNTIME_MISMATCH"
+        summary = "PyTorch CUDA runtime mismatch detected"
+        if torch_cuda_build is None:
+            mismatch_code = "PT_CPU_WHEEL_ON_GPU"
+            summary = "PyTorch CPU-only wheel detected on a GPU-capable machine"
+        inferred.append(
+            make_issue(
+                name="Compatibility Matrix",
+                status=f"WARN - {summary}",
+                severity="warning",
+                fix=(
+                    "Install a CUDA-enabled PyTorch build matching this environment and verify "
+                    "`torch.version.cuda` and `torch.cuda.is_available()`."
+                ),
+                check_id="compatibility_matrix",
+                category="compatibility",
+                details=(
+                    "NVIDIA driver is visible, but PyTorch still reports CUDA unavailable."
+                ),
+                confidence="high",
+                mismatch_code=mismatch_code,
+                evidence=[
+                    cuda_issue.status,
+                    torch_cuda_issue.status,
+                    f"torch_cuda_build={torch_cuda_build or 'None'}",
+                ],
+                metadata={"torch_cuda_build": torch_cuda_build},
+            )
+        )
+
+    return inferred
 
 
 def check_accelerator_backend() -> List[DiagnosticIssue]:
@@ -1742,6 +1833,8 @@ def diagnose_env(
                 extended_checks, parallel=parallel, timeout=120.0, failure_severity="warning"
             )
         )
+
+    issues.extend(_compatibility_matrix_issues(issues))
 
     return issues
 

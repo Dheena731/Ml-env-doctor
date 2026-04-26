@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .config import load_config
 from .constants import DEFAULT_REQUIREMENTS_FILE
@@ -91,6 +92,7 @@ class FixVerificationSummary:
     resolved_critical: List[str] = field(default_factory=list)
     remaining_critical: List[str] = field(default_factory=list)
     remaining_warning: List[str] = field(default_factory=list)
+    confidence_delta: int = 0
 
 
 def _count_issues(issues: List[DiagnosticIssue], *, severity: str) -> int:
@@ -102,6 +104,11 @@ def _count_issues(issues: List[DiagnosticIssue], *, severity: str) -> int:
         for issue in issues
         if issue.severity == "warning" and issue.status.startswith(("WARN", "FAIL"))
     )
+
+
+def _risk_score(critical: int, warning: int) -> int:
+    """Weighted issue score used for verification confidence change."""
+    return critical * 2 + warning
 
 
 def _build_verification_summary(
@@ -124,14 +131,21 @@ def _build_verification_summary(
         if issue.severity == "warning" and issue.status.startswith(("WARN", "FAIL"))
     ]
 
+    before_critical = _count_issues(before_issues, severity="critical")
+    after_critical = _count_issues(after_issues, severity="critical")
+    before_warning = _count_issues(before_issues, severity="warning")
+    after_warning = _count_issues(after_issues, severity="warning")
+
     return FixVerificationSummary(
-        before_critical=_count_issues(before_issues, severity="critical"),
-        after_critical=_count_issues(after_issues, severity="critical"),
-        before_warning=_count_issues(before_issues, severity="warning"),
-        after_warning=_count_issues(after_issues, severity="warning"),
+        before_critical=before_critical,
+        after_critical=after_critical,
+        before_warning=before_warning,
+        after_warning=after_warning,
         resolved_critical=sorted(before_critical_names - after_critical_names),
         remaining_critical=sorted(after_critical_names),
         remaining_warning=after_warning_names,
+        confidence_delta=_risk_score(before_critical, before_warning)
+        - _risk_score(after_critical, after_warning),
     )
 
 
@@ -308,6 +322,60 @@ def create_virtualenv(env_name: str = ".venv") -> Optional[Path]:
     except Exception as exc:
         print_error(f"Failed to create virtual environment: {exc}")
         return None
+
+
+def _backup_root() -> Path:
+    """Return the fix backup root directory."""
+    return Path(".mlenvdoctor") / "fix-backups"
+
+
+def create_fix_backup(paths: List[Path]) -> Optional[Path]:
+    """Create a backup snapshot for rollback-safe file operations."""
+    tracked_paths = [path for path in paths if path.exists() and path.is_file()]
+    if not tracked_paths:
+        return None
+
+    backup_dir = _backup_root() / datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    manifest_lines: List[str] = []
+    for path in tracked_paths:
+        relative_name = path.as_posix().replace("/", "__")
+        target_path = backup_dir / relative_name
+        target_path.write_bytes(path.read_bytes())
+        manifest_lines.append(f"{relative_name}\t{path.as_posix()}")
+
+    (backup_dir / "manifest.tsv").write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+    return backup_dir
+
+
+def rollback_last_fix() -> Dict[str, object]:
+    """Restore files from the latest fix backup snapshot."""
+    root = _backup_root()
+    if not root.exists():
+        return {"ok": False, "message": "No fix backups found."}
+
+    candidates = sorted([path for path in root.iterdir() if path.is_dir()])
+    if not candidates:
+        return {"ok": False, "message": "No fix backups found."}
+
+    latest = candidates[-1]
+    manifest_path = latest / "manifest.tsv"
+    if not manifest_path.exists():
+        return {"ok": False, "message": f"Backup manifest missing in {latest}."}
+
+    restored: List[str] = []
+    for raw_line in manifest_path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        backup_name, original_path = raw_line.split("\t", 1)
+        source = latest / backup_name
+        target = Path(original_path)
+        if source.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read_bytes())
+            restored.append(original_path)
+
+    return {"ok": True, "message": f"Restored {len(restored)} file(s) from backup {latest}.", "restored": restored}
 
 
 def plan_fixes(
@@ -513,6 +581,10 @@ def auto_fix(
     created_paths: List[Path] = []
     venv_python: Optional[str] = None
     success = True
+    backup_candidates = [action.output_path for action in actions if action.output_path is not None]
+    backup_dir = create_fix_backup([path for path in backup_candidates if path is not None])
+    if backup_dir is not None:
+        console.print(f"[cyan]Rollback backup created: {backup_dir}[/cyan]")
 
     for action in actions:
         ok, output_path, description = _execute_action(
@@ -557,7 +629,8 @@ def auto_fix(
             console.print(
                 "[bold]Verification summary:[/bold] "
                 f"critical {verification_summary.before_critical} -> {verification_summary.after_critical}, "
-                f"warnings {verification_summary.before_warning} -> {verification_summary.after_warning}"
+                f"warnings {verification_summary.before_warning} -> {verification_summary.after_warning}, "
+                f"confidence_delta={verification_summary.confidence_delta:+d}"
             )
             if verification_summary.resolved_critical:
                 console.print(

@@ -145,6 +145,7 @@ def test_fix_command():
     assert "--plan" in result.stdout
     assert "--verify" in result.stdout
     assert "--apply" in result.stdout
+    assert "--rollback" in result.stdout
 
 
 def test_fix_dry_run(monkeypatch):
@@ -194,6 +195,16 @@ def test_doctor_human_output_is_summary_not_table(monkeypatch):
     assert "Diagnostic Results" not in result.stdout
 
 
+def test_doctor_guided_output_is_beginner_focused(monkeypatch):
+    """Guided mode should show a one-step recovery flow."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    result = runner.invoke(app, ["doctor", "--guided"])
+    assert result.exit_code == 2
+    assert "Guided Recovery" in result.stdout
+    assert "Step 1 (do this now):" in result.stdout
+    assert "Step 2 (verify):" in result.stdout
+
+
 def test_fix_verify_mode_runs_diagnostics_without_auto_fix(monkeypatch):
     """Verify mode should bypass auto-fix and print triage output."""
     calls = {"auto_fix": 0}
@@ -220,6 +231,17 @@ def test_fix_verify_rejects_conflicting_modes():
     result = runner.invoke(app, ["fix", "--verify", "--apply"])
     assert result.exit_code != 0
     assert "--verify cannot be combined" in result.output
+
+
+def test_fix_rollback_mode(monkeypatch):
+    """Rollback mode should restore latest backup snapshot when available."""
+    monkeypatch.setattr(
+        "mlenvdoctor.cli.rollback_last_fix",
+        lambda: {"ok": True, "message": "Restored 1 file(s)."},
+    )
+    result = runner.invoke(app, ["fix", "--rollback"])
+    assert result.exit_code == 0
+    assert "Restored 1 file(s)." in result.stdout
 
 
 def test_stack_command():

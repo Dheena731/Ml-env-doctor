@@ -13,7 +13,7 @@ from . import __version__
 from .diagnose import diagnose_env, get_fix_commands, print_diagnostic_table, summarize_for_doctor
 from .dockerize import generate_dockerfile, generate_service_template
 from .export import build_export_data, export_csv, export_html, export_json, get_exit_code
-from .fix import auto_fix, get_stack_requirements
+from .fix import auto_fix, get_stack_requirements, rollback_last_fix
 from .gpu import benchmark_gpu_ops, smoke_test_lora
 from .gpu import test_model as gpu_test_model
 from .icons import (
@@ -119,6 +119,29 @@ def _print_doctor_summary(issues) -> None:
     console.print()
     console.print(f"[bold green]Do this next:[/bold green] {top_finding.best_fix}")
     console.print(f"[green]Then verify with:[/green] {verify_hint}")
+
+
+def _print_guided_doctor_summary(issues) -> None:
+    """Print a beginner-friendly guided doctor summary."""
+    findings = summarize_for_doctor(issues)
+    if not findings:
+        console.print(f"[bold green]{icon_check()} Great news: no major blockers found.[/bold green]")
+        console.print(
+            "[green]Try your workflow now, or run `mlenvdoctor diagnose` for full evidence.[/green]"
+        )
+        return
+
+    top = findings[0]
+    verify_hint = top.verify_steps[0] if top.verify_steps else "mlenvdoctor diagnose"
+    console.print(f"[bold blue]{icon_search()} Guided Recovery[/bold blue]\n")
+    console.print(f"[bold]What failed:[/bold] {top.problem}")
+    console.print(f"[bold]Likely cause:[/bold] {top.likely_cause}")
+    console.print(f"[bold]Step 1 (do this now):[/bold] {top.best_fix}")
+    console.print(f"[bold]Step 2 (verify):[/bold] {verify_hint}")
+    if len(findings) > 1:
+        console.print(
+            f"[yellow]After this fix, review the remaining {len(findings) - 1} finding(s).[/yellow]"
+        )
 
 
 def version_callback(value: bool):
@@ -227,6 +250,9 @@ def diagnose(
 @app.command()
 def doctor(
     ci: bool = typer.Option(False, "--ci", help="Emit CI-friendly output"),
+    guided: bool = typer.Option(
+        False, "--guided", help="Show beginner-friendly one-step recovery guidance"
+    ),
     full: bool = typer.Option(
         False, "--full", "-f", help="Run full diagnostics including GPU benchmarks"
     ),
@@ -254,6 +280,8 @@ def doctor(
                 f"ISSUE {finding.problem} | confidence={finding.confidence} | cause={finding.likely_cause} | "
                 f"fix={finding.best_fix} | verify={verify}"
             )
+    elif guided:
+        _print_guided_doctor_summary(issues)
     else:
         _print_doctor_summary(issues)
 
@@ -337,6 +365,11 @@ def fix(
         "--verify",
         help="Run verification checks and show the current doctor summary without applying fixes",
     ),
+    rollback: bool = typer.Option(
+        False,
+        "--rollback",
+        help="Restore files from the latest fix backup snapshot",
+    ),
 ):
     f"""
     {icon_wrench()} Auto-fix environment issues and generate requirements.
@@ -344,8 +377,20 @@ def fix(
     Generates requirements.txt or conda environment file based on detected issues.
     Optionally creates a virtual environment and installs dependencies.
     """
-    if verify_only and (apply or dry_run or plan):
-        raise typer.BadParameter("--verify cannot be combined with --apply, --dry-run, or --plan")
+    if verify_only and (apply or dry_run or plan or rollback):
+        raise typer.BadParameter(
+            "--verify cannot be combined with --apply, --dry-run, --plan, or --rollback"
+        )
+    if rollback and (apply or dry_run or plan):
+        raise typer.BadParameter("--rollback cannot be combined with --apply, --dry-run, or --plan")
+
+    if rollback:
+        rollback_result = rollback_last_fix()
+        if rollback_result.get("ok"):
+            console.print(f"[green]{icon_check()} {rollback_result['message']}[/green]")
+            raise typer.Exit(0)
+        console.print(f"[yellow]{icon_warning()} {rollback_result['message']}[/yellow]")
+        raise typer.Exit(1)
 
     if verify_only:
         issues = diagnose_env(full=False)

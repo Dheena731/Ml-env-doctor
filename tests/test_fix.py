@@ -295,6 +295,7 @@ def test_auto_fix_verification_summary(monkeypatch: pytest.MonkeyPatch):
     assert result.verification_summary.before_critical == 1
     assert result.verification_summary.after_critical == 0
     assert "PyTorch CUDA" in result.verification_summary.resolved_critical
+    assert result.verification_summary.confidence_delta > 0
 
 
 def test_auto_fix_uses_doctor_findings_as_reasons(monkeypatch: pytest.MonkeyPatch):

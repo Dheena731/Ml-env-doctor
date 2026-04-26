@@ -5,7 +5,15 @@ All notable changes to ML Environment Doctor are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.3] - 2026-04-09
+## [0.1.4] - 2026-04-09
+
+### Added
+- Expanded MCP JSON-lines integration with `health`, `list_tools`, `tool_schema`, and `report_bundle`
+- Added richer MCP response payloads (runtime context and summary blocks) for assistant/CI consumers
+- Added guided doctor mode (`mlenvdoctor doctor --guided`) for beginner-oriented one-step recovery
+- Added compatibility mismatch codes in diagnostic exports for machine-actionable integration
+- Added rollback scaffolding (`mlenvdoctor fix --rollback`) for safer fix workflows
+- Added user-growth assets: CI workflow template, environment issue template, and case-study template
 
 ### Changed
 - Refactored diagnostics into deeper framework-specific checks for Python, PyTorch, TensorFlow/Keras, and JAX/Flax

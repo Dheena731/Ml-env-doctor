@@ -82,6 +82,7 @@ Compact CI-friendly output:
 ```bash
 mlenvdoctor doctor --ci
 mlenvdoctor doctor --ci --full
+mlenvdoctor doctor --guided
 ```
 
 ### Report
@@ -103,6 +104,7 @@ mlenvdoctor fix --dry-run
 mlenvdoctor fix --apply
 mlenvdoctor fix --apply --yes
 mlenvdoctor fix --verify
+mlenvdoctor fix --rollback
 mlenvdoctor fix --venv --apply --yes
 mlenvdoctor fix --conda
 mlenvdoctor fix --stack llm-training --dry-run
@@ -149,11 +151,37 @@ Current Docker generation supports:
 mlenvdoctor mcp serve
 ```
 
-This is currently a small JSON-lines stub with:
+MCP now exposes a JSON-lines interface over stdin/stdout.
+
+Core integration tools:
 
 - `diagnose`
 - `get_fixes`
 - `doctor_summary`
+- `report_bundle`
+- `diagnose_environment` (v1 alias)
+- `get_fix_plan` (v1 alias)
+- `verify_fix` (v1 alias)
+- `export_report` (v1 alias)
+- `list_tools`
+- `tool_schema`
+- `health`
+
+Request format:
+
+```json
+{"tool":"list_tools","arguments":{}}
+```
+
+```json
+{"tool":"tool_schema","arguments":{"name":"report_bundle"}}
+```
+
+Compatibility policy:
+
+- MCP schemas evolve additively.
+- v1 alias names are kept for migration safety.
+- Use `tool_schema` to discover canonical tool names.
 
 ## Output Schema
 
@@ -211,8 +239,10 @@ This keeps the main test suite independent from whether `mlenvdoctor` was instal
 - [IMPROVEMENTS.md](IMPROVEMENTS.md) tracks active improvement themes
 - [IMPROVEMENTS_ROADMAP.md](IMPROVEMENTS_ROADMAP.md) outlines future milestones
 - [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) explains the current project architecture and product shape
+- [docs/FAILURE_TAXONOMY.md](docs/FAILURE_TAXONOMY.md) defines prioritized mismatch codes used by diagnostics and MCP
 - [docs/KILLER_PRODUCT_PLAN.md](docs/KILLER_PRODUCT_PLAN.md) is the strategic roadmap for turning the project into a category-leading product
 - [docs/PHASED_EXECUTION_PLAN.md](docs/PHASED_EXECUTION_PLAN.md) breaks the strategy into execution phases and current build focus
+- [docs/CASE_STUDY_TEMPLATE.md](docs/CASE_STUDY_TEMPLATE.md) helps publish real failure-to-fix stories for user onboarding
 - [docker/README.md](docker/README.md) documents Docker-specific workflows
 
 ## License

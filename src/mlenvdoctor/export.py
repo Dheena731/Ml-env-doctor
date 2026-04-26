@@ -48,6 +48,7 @@ def issue_to_dict(issue: DiagnosticIssue) -> Dict[str, Any]:
         "verify_steps": issue.verify_steps,
         "confidence": issue.confidence,
         "evidence": issue.evidence,
+        "mismatch_code": issue.mismatch_code,
         "metadata": issue.metadata,
     }
 

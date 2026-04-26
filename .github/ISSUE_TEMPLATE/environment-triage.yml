@@ -1,0 +1,46 @@
+name: Environment triage report
+description: Report an ML environment issue with structured diagnostics
+title: "[env]: "
+labels: ["triage", "environment"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please attach structured diagnostics so maintainers can reproduce quickly.
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, shell, and whether this is local/CI/WSL/container
+      placeholder: Windows 11 + PowerShell + WSL2
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected outcome
+      placeholder: What should have worked?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual outcome
+      placeholder: Error, stack trace, or failure behavior
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: `mlenvdoctor doctor --ci` output
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: diagnose_json
+    attributes:
+      label: `mlenvdoctor diagnose --json -` output
+      description: Paste the JSON payload (or attach as file)
+      render: json
+    validations:
+      required: true

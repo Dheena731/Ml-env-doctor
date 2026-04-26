@@ -358,3 +358,41 @@ def test_summarize_for_doctor_groups_dependency_stack_issues():
     assert findings[0].problem == "The core ML training dependency stack is incomplete or outdated"
     assert findings[0].category == "dependencies"
     assert "library_transformers" in findings[0].linked_checks
+
+
+def test_compatibility_matrix_flags_cpu_only_torch_on_gpu_machine():
+    """Compatibility inference should emit machine-readable mismatch codes."""
+    issues = [
+        DiagnosticIssue(
+            name="Python Runtime",
+            status="PASS - 3.11.8",
+            severity="info",
+            fix="",
+            check_id="python_runtime",
+            category="runtime",
+            metadata={"current_version": "3.11.8"},
+        ),
+        DiagnosticIssue(
+            name="NVIDIA GPU Driver",
+            status="PASS - CUDA 12.4",
+            severity="info",
+            fix="",
+            check_id="cuda_driver",
+            category="gpu",
+        ),
+        DiagnosticIssue(
+            name="PyTorch CUDA",
+            status="FAIL - CUDA not available",
+            severity="critical",
+            fix="pip install torch",
+            check_id="pytorch_cuda",
+            category="pytorch",
+            metadata={"torch_cuda_build": None},
+        ),
+    ]
+
+    inferred = diagnose_module._compatibility_matrix_issues(issues)
+
+    assert inferred
+    assert inferred[0].check_id == "compatibility_matrix"
+    assert inferred[0].mismatch_code == "PT_CPU_WHEEL_ON_GPU"

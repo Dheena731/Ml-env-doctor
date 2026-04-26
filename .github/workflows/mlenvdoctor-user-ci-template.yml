@@ -1,0 +1,32 @@
+name: mlenvdoctor user CI template
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  env-diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install mlenvdoctor
+        run: python -m pip install --upgrade pip mlenvdoctor
+
+      - name: Run doctor summary
+        run: mlenvdoctor doctor --ci
+
+      - name: Export diagnostic bundle
+        run: |
+          mkdir -p artifacts
+          mlenvdoctor diagnose --json artifacts/diagnose.json --csv artifacts/diagnose.csv --html artifacts/diagnose.html
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlenvdoctor-artifacts
+          path: artifacts/

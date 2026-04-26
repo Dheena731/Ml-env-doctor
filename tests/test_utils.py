@@ -71,6 +71,7 @@ def test_build_export_data_includes_exit_code():
     assert data["summary"]["warnings"] == 1
     assert data["issues"][0]["check_id"] == ""
     assert data["issues"][0]["verify_steps"] == []
+    assert data["issues"][0]["mismatch_code"] == ""
     assert data["doctor_summary_schema_version"] == "1.0"
     assert "doctor_summary" in data
     assert "runtime_context" in data
@@ -124,6 +125,64 @@ def test_mcp_stub_reports_unknown_tool():
     assert "available_tools" in response
 
 
+def test_mcp_stub_list_tools_includes_core_tools():
+    """The MCP stub should expose discoverable tools."""
+    response = _handle_request({"tool": "list_tools", "arguments": {}})
+
+    assert response["ok"] is True
+    tool_names = [tool["name"] for tool in response["result"]["tools"]]
+    assert "diagnose" in tool_names
+    assert "get_fixes" in tool_names
+    assert "doctor_summary" in tool_names
+    assert "report_bundle" in tool_names
+
+
+def test_mcp_stub_health_returns_version():
+    """The MCP health endpoint should return status and version details."""
+    response = _handle_request({"tool": "health", "arguments": {}})
+
+    assert response["ok"] is True
+    assert response["result"]["status"] == "ok"
+    assert "version" in response["result"]
+
+
+def test_mcp_stub_tool_schema_rejects_missing_name():
+    """Tool schema endpoint should validate required fields."""
+    response = _handle_request({"tool": "tool_schema", "arguments": {}})
+
+    assert response["ok"] is False
+    assert "requires" in response["error"]
+
+
+def test_mcp_stub_report_bundle_exposes_compact_payload(monkeypatch):
+    """Report bundle should return summary, doctor findings, and fixes together."""
+    issues = [DiagnosticIssue("Torch", "FAIL - missing", "critical", "pip install torch")]
+    monkeypatch.setattr(
+        "mlenvdoctor.mcp.diagnose_env", lambda full=False, show_header=False: issues
+    )
+
+    response = _handle_request({"tool": "report_bundle", "arguments": {"full": False}})
+
+    assert response["ok"] is True
+    assert response["result"]["summary"]["critical"] == 1
+    assert response["result"]["doctor_summary"][0]["problem"] == "Torch"
+    assert response["result"]["fixes"][0]["command"] == "pip install torch"
+
+
+def test_mcp_v1_alias_tool_names_are_supported(monkeypatch):
+    """MCP v1 alias names should resolve to canonical tools."""
+    issues = [DiagnosticIssue("Torch", "FAIL - missing", "critical", "pip install torch")]
+    monkeypatch.setattr(
+        "mlenvdoctor.mcp.diagnose_env", lambda full=False, show_header=False: issues
+    )
+
+    response = _handle_request({"tool": "diagnose_environment", "arguments": {"full": False}})
+
+    assert response["ok"] is True
+    assert response["canonical_tool"] == "diagnose"
+    assert "issues" in response["result"]
+
+
 def test_mcp_stub_get_fixes_uses_machine_readable_shape(monkeypatch):
     """The MCP stub should return fix data in a stable schema."""
     issues = [DiagnosticIssue("Torch", "FAIL - missing", "critical", "pip install torch")]
@@ -136,6 +195,7 @@ def test_mcp_stub_get_fixes_uses_machine_readable_shape(monkeypatch):
 
     assert response["ok"] is True
     assert response["result"]["exit_code"] == 2
+    assert response["result"]["summary"]["critical"] == 1
     assert response["result"]["fixes"][0]["command"] == "pip install torch"
 
 
