@@ -375,7 +375,11 @@ def rollback_last_fix() -> Dict[str, object]:
             target.write_bytes(source.read_bytes())
             restored.append(original_path)
 
-    return {"ok": True, "message": f"Restored {len(restored)} file(s) from backup {latest}.", "restored": restored}
+    return {
+        "ok": True,
+        "message": f"Restored {len(restored)} file(s) from backup {latest}.",
+        "restored": restored,
+    }
 
 
 def plan_fixes(

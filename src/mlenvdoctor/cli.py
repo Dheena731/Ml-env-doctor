@@ -125,7 +125,9 @@ def _print_guided_doctor_summary(issues) -> None:
     """Print a beginner-friendly guided doctor summary."""
     findings = summarize_for_doctor(issues)
     if not findings:
-        console.print(f"[bold green]{icon_check()} Great news: no major blockers found.[/bold green]")
+        console.print(
+            f"[bold green]{icon_check()} Great news: no major blockers found.[/bold green]"
+        )
         console.print(
             "[green]Try your workflow now, or run `mlenvdoctor diagnose` for full evidence.[/green]"
         )

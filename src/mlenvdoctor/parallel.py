@@ -1,7 +1,7 @@
 """Parallel execution utilities for independent operations."""
 
 import concurrent.futures
-from typing import Callable, Iterable, List, TypeVar, cast
+from typing import Callable, Iterable, List, Optional, Tuple, TypeVar, Union, cast
 
 from .logger import logger
 
@@ -13,7 +13,7 @@ def run_parallel(
     func: Callable[[T], R],
     items: Iterable[T],
     max_workers: int = 4,
-    timeout: float | None = None,
+    timeout: Optional[float] = None,
 ) -> List[R]:
     """
     Run a function in parallel on multiple items.
@@ -21,7 +21,6 @@ def run_parallel(
     Args:
         func: Function to execute
         items: Iterable of items to process
-        items_list: List of items to process
         max_workers: Maximum number of parallel workers
         timeout: Maximum time to wait for all tasks (None = no timeout)
 
@@ -44,7 +43,7 @@ def run_parallel(
         future_to_index = {
             executor.submit(func, item): index for index, item in enumerate(items_list)
         }
-        results: List[R | None] = [None] * len(items_list)
+        results: List[Optional[R]] = [None] * len(items_list)
         completed = 0
 
         for future in concurrent.futures.as_completed(future_to_index, timeout=timeout):
@@ -67,8 +66,8 @@ def run_parallel_with_results(
     func: Callable[[T], R],
     items: Iterable[T],
     max_workers: int = 4,
-    timeout: float | None = None,
-) -> List[tuple[T, R | Exception]]:
+    timeout: Optional[float] = None,
+) -> List[Tuple[T, Union[R, Exception]]]:
     """
     Run a function in parallel and return results with original items.
 
@@ -101,7 +100,7 @@ def run_parallel_with_results(
         future_to_index = {
             executor.submit(func, item): index for index, item in enumerate(items_list)
         }
-        results: List[tuple[T, R | Exception] | None] = [None] * len(items_list)
+        results: List[Optional[Tuple[T, Union[R, Exception]]]] = [None] * len(items_list)
 
         for future in concurrent.futures.as_completed(future_to_index, timeout=timeout):
             index = future_to_index[future]
@@ -111,4 +110,4 @@ def run_parallel_with_results(
             except Exception as e:
                 results[index] = (item, e)
 
-        return [cast(tuple[T, R | Exception], result) for result in results]
+        return [cast(Tuple[T, Union[R, Exception]], result) for result in results]

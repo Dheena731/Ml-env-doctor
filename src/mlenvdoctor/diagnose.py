@@ -628,9 +628,7 @@ def _compatibility_matrix_issues(issues: List[DiagnosticIssue]) -> List[Diagnost
                 ),
                 check_id="compatibility_matrix",
                 category="compatibility",
-                details=(
-                    "NVIDIA driver is visible, but PyTorch still reports CUDA unavailable."
-                ),
+                details=("NVIDIA driver is visible, but PyTorch still reports CUDA unavailable."),
                 confidence="high",
                 mismatch_code=mismatch_code,
                 evidence=[
