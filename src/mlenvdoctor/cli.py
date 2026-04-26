@@ -1,5 +1,6 @@
 """CLI entrypoint for ML Environment Doctor."""
 
+import inspect
 import json
 from datetime import datetime
 from pathlib import Path
@@ -37,19 +38,30 @@ def _patch_typer_click_metavar_compat() -> None:
         return
 
     original_parameter_make_metavar = click.core.Parameter.make_metavar
+    # Detect whether this Click version's make_metavar accepts a ctx arg.
+    _param_sig = inspect.signature(original_parameter_make_metavar)
+    _click_wants_ctx = len(_param_sig.parameters) > 1  # >1 means (self, ctx)
 
     def parameter_make_metavar(self, ctx=None):  # type: ignore[no-untyped-def]
-        if ctx is None:
-            ctx = click.Context(click.Command(self.name or "mlenvdoctor"))
-        return original_parameter_make_metavar(self, ctx)
+        if _click_wants_ctx:
+            if ctx is None:
+                ctx = click.Context(click.Command(self.name or "mlenvdoctor"))
+            return original_parameter_make_metavar(self, ctx)
+        return original_parameter_make_metavar(self)
 
     parameter_make_metavar.__mlenvdoctor_compat__ = True  # type: ignore[attr-defined]
     click.core.Parameter.make_metavar = parameter_make_metavar
 
+    original_argument_make_metavar = click.core.Argument.make_metavar
+    _arg_sig = inspect.signature(original_argument_make_metavar)
+    _arg_wants_ctx = len(_arg_sig.parameters) > 1
+
     def typer_argument_make_metavar(self, ctx=None):  # type: ignore[no-untyped-def]
-        if ctx is None:
-            ctx = click.Context(click.Command(self.name or "mlenvdoctor"))
-        return click.core.Argument.make_metavar(self, ctx)
+        if _arg_wants_ctx:
+            if ctx is None:
+                ctx = click.Context(click.Command(self.name or "mlenvdoctor"))
+            return original_argument_make_metavar(self, ctx)
+        return original_argument_make_metavar(self)
 
     TyperArgument.make_metavar = typer_argument_make_metavar
 

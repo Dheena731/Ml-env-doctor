@@ -1,6 +1,7 @@
 """Tests for CLI commands."""
 
 import json
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -9,6 +10,12 @@ from mlenvdoctor.cli import app
 from mlenvdoctor.diagnose import DiagnosticIssue
 
 runner = CliRunner()
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE.sub("", text)
 
 
 def _sample_issues() -> list[DiagnosticIssue]:
@@ -141,11 +148,12 @@ def test_fix_command():
     """Test fix command."""
     result = runner.invoke(app, ["fix", "--help"])
     assert result.exit_code == 0
-    assert "--dry-run" in result.stdout
-    assert "--plan" in result.stdout
-    assert "--verify" in result.stdout
-    assert "--apply" in result.stdout
-    assert "--rollback" in result.stdout
+    stdout = _strip_ansi(result.stdout)
+    assert "--dry-run" in stdout
+    assert "--plan" in stdout
+    assert "--verify" in stdout
+    assert "--apply" in stdout
+    assert "--rollback" in stdout
 
 
 def test_fix_dry_run(monkeypatch):
@@ -181,18 +189,19 @@ def test_doctor_human_output_is_summary_not_table(monkeypatch):
     monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 2
-    assert "Detected runtime:" in result.stdout
-    assert "platform=linux" in result.stdout
-    assert "backend=cuda" in result.stdout
-    assert "nvidia_tooling=yes" in result.stdout
-    assert "Problem: PyTorch CUDA" in result.stdout
-    assert "Confidence:" in result.stdout
-    assert "Likely cause:" in result.stdout
-    assert "Verify:" in result.stdout
-    assert "Linked checks:" in result.stdout
-    assert "Do this next:" in result.stdout
-    assert "Then verify with:" in result.stdout
-    assert "Diagnostic Results" not in result.stdout
+    stdout = _strip_ansi(result.stdout)
+    assert "Detected runtime:" in stdout
+    assert "platform=linux" in stdout
+    assert "backend=cuda" in stdout
+    assert "nvidia_tooling=yes" in stdout
+    assert "Problem: PyTorch CUDA" in stdout
+    assert "Confidence:" in stdout
+    assert "Likely cause:" in stdout
+    assert "Verify:" in stdout
+    assert "Linked checks:" in stdout
+    assert "Do this next:" in stdout
+    assert "Then verify with:" in stdout
+    assert "Diagnostic Results" not in stdout
 
 
 def test_doctor_guided_output_is_beginner_focused(monkeypatch):
@@ -200,9 +209,10 @@ def test_doctor_guided_output_is_beginner_focused(monkeypatch):
     monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
     result = runner.invoke(app, ["doctor", "--guided"])
     assert result.exit_code == 2
-    assert "Guided Recovery" in result.stdout
-    assert "Step 1 (do this now):" in result.stdout
-    assert "Step 2 (verify):" in result.stdout
+    stdout = _strip_ansi(result.stdout)
+    assert "Guided Recovery" in stdout
+    assert "Step 1 (do this now):" in stdout
+    assert "Step 2 (verify):" in stdout
 
 
 def test_fix_verify_mode_runs_diagnostics_without_auto_fix(monkeypatch):
@@ -222,7 +232,7 @@ def test_fix_verify_mode_runs_diagnostics_without_auto_fix(monkeypatch):
 
     result = runner.invoke(app, ["fix", "--verify"])
     assert result.exit_code == 2
-    assert "Doctor Summary" in result.stdout
+    assert "Doctor Summary" in _strip_ansi(result.stdout)
     assert calls["auto_fix"] == 0
 
 
@@ -230,7 +240,7 @@ def test_fix_verify_rejects_conflicting_modes():
     """Verify mode should reject apply/plan combinations."""
     result = runner.invoke(app, ["fix", "--verify", "--apply"])
     assert result.exit_code != 0
-    assert "--verify cannot be combined" in result.output
+    assert "--verify cannot be combined" in _strip_ansi(result.output)
 
 
 def test_fix_rollback_mode(monkeypatch):
@@ -241,7 +251,7 @@ def test_fix_rollback_mode(monkeypatch):
     )
     result = runner.invoke(app, ["fix", "--rollback"])
     assert result.exit_code == 0
-    assert "Restored 1 file(s)." in result.stdout
+    assert "Restored 1 file(s)." in _strip_ansi(result.stdout)
 
 
 def test_stack_command():
