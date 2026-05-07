@@ -233,9 +233,14 @@ The repository uses two test layers:
 
 This keeps the main test suite independent from whether `mlenvdoctor` was installed as a shell command in the current environment.
 
-## Repository Notes
+## Documentation
 
 - Documentation site: https://dheena731.github.io/Ml-env-doctor/
+- Local preview: `python -m pip install -r requirements-docs.txt && mkdocs serve`
+- GitHub Pages: set **Settings -> Pages -> Source** to **GitHub Actions**; `.github/workflows/pages.yml` publishes `mkdocs build --strict`.
+
+## Repository Notes
+
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers local setup and contribution flow
 - [IMPROVEMENTS.md](IMPROVEMENTS.md) tracks active improvement themes
 - [IMPROVEMENTS_ROADMAP.md](IMPROVEMENTS_ROADMAP.md) outlines future milestones

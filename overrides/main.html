@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="mlenvdoctor">
+  <meta property="og:description" content="ML Environment Diagnostics - 47+ checks in 12 seconds">
+  <meta property="og:image" content="{{ 'assets/hero-terminal.png' | url }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#01696f">
+  <link rel="manifest" href="{{ 'assets/site.webmanifest' | url }}">
+{% endblock %}

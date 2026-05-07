@@ -15,4 +15,5 @@ __all__ = [
     "retry",
     "parallel",
     "constants",
+    "api",
 ]

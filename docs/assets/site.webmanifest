@@ -1,0 +1,17 @@
+{
+  "name": "mlenvdoctor documentation",
+  "short_name": "mlenvdoctor",
+  "description": "ML environment diagnostics for PyTorch, CUDA, Conda, Pipenv, Docker, and LLM training stacks.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#01696f",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
