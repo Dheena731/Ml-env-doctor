@@ -1,0 +1,46 @@
+site_name: ML Environment Doctor
+site_description: Diagnose, fix, and verify ML environment readiness (PyTorch, TensorFlow, JAX, Docker, MCP).
+repo_url: https://github.com/Dheena731/Ml-env-doctor
+repo_name: Dheena731/Ml-env-doctor
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.highlight
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+      - Diagnose and Doctor: guides/diagnose-and-doctor.md
+      - Fix workflow: guides/fix-workflow.md
+      - Reports and exports: guides/reports-and-exports.md
+      - Dockerize: guides/dockerize.md
+      - MCP integration: guides/mcp.md
+  - Reference:
+      - CLI: reference/cli.md
+      - JSON schema: reference/json-schema.md
+      - Mismatch codes: reference/mismatch-codes.md
+  - Troubleshooting: troubleshooting.md
+  - FAQ: faq.md
+  - Contributing: contributing.md
+  - Strategy (project docs):
+      - Project overview: PROJECT_OVERVIEW.md
+      - Failure taxonomy: FAILURE_TAXONOMY.md
+      - Killer product plan: KILLER_PRODUCT_PLAN.md
+      - Phased execution plan: PHASED_EXECUTION_PLAN.md
+      - Future plan: mlenvdoctor-future-plan.md
+      - Case study template: CASE_STUDY_TEMPLATE.md
+
