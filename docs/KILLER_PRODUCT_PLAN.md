@@ -576,7 +576,7 @@ Use this as the operating model for roadmap decisions:
 
 ## 11. Relationship to the Existing Future Plan
 
-[mlenvdoctor-future-plan.md](/home/dhinakaran/Ml-env-doctor/mlenvdoctor-future-plan.md) should remain the concise north-star note.
+[mlenvdoctor-future-plan.md](mlenvdoctor-future-plan.md) should remain the concise north-star note.
 
 This document is the expanded strategy source of truth that:
 

@@ -229,8 +229,7 @@ def build_docs():
     
     (OUT_DIR / "styles.css").write_text(CSS, encoding="utf-8")
     (OUT_DIR / "script.js").write_text(JS, encoding="utf-8")
-    
-    md = markdown.Markdown(extensions=['fenced_code', 'codehilite', 'tables', 'toc'])
+    (OUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
     
     for p in DOCS_DIR.rglob("*.md"):
         rel_path = p.relative_to(DOCS_DIR)
@@ -242,6 +241,7 @@ def build_docs():
         # Replace .md links with .html links
         content = re.sub(r'\]\(([^)]+)\.md([^)]*)\)', r'](\1.html\2)', content)
         
+        md = markdown.Markdown(extensions=['fenced_code', 'codehilite', 'tables', 'toc'])
         html_content = md.convert(content)
         
         depth = len(rel_path.parts) - 1

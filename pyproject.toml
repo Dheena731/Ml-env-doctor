@@ -53,6 +53,7 @@ mlenvdoctor = "mlenvdoctor.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/Dheena731/Ml-env-doctor"
+Documentation = "https://dheena731.github.io/Ml-env-doctor/"
 Repository = "https://github.com/Dheena731/Ml-env-doctor.git"
 Issues = "https://github.com/Dheena731/Ml-env-doctor/issues"
 

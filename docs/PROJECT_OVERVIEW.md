@@ -735,5 +735,5 @@ then it can become genuinely valuable for both experienced AI engineers and newe
 
 For the long-range product strategy and competitive roadmap, see:
 
-- [KILLER_PRODUCT_PLAN.md](/home/dhinakaran/Ml-env-doctor/docs/KILLER_PRODUCT_PLAN.md)
-- [mlenvdoctor-future-plan.md](/home/dhinakaran/Ml-env-doctor/mlenvdoctor-future-plan.md)
+- [KILLER_PRODUCT_PLAN.md](KILLER_PRODUCT_PLAN.md)
+- [mlenvdoctor-future-plan.md](mlenvdoctor-future-plan.md)

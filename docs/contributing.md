@@ -15,6 +15,7 @@ pytest
 
 ```bash
 pip install -e ".[docs]"
-mkdocs serve
+python scripts/build_docs.py
+python -m http.server 8000 -d docs_dist
 ```
 
