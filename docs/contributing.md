@@ -5,8 +5,8 @@ Contributions are welcome, especially new checks for real ML environment failure
 ## Local Setup
 
 ```bash
-git clone https://github.com/dhinakaran/mlenvdoctor.git
-cd mlenvdoctor
+git clone https://github.com/Dheena731/Ml-env-doctor.git
+cd Ml-env-doctor
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"

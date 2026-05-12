@@ -1,8 +1,8 @@
 site_name: mlenvdoctor
 site_description: "ML Environment Diagnostics - 47+ checks in 12 seconds"
-site_url: https://mlenvdoctor.com
-repo_url: https://github.com/dhinakaran/mlenvdoctor
-edit_uri: edit/main/docs/
+site_url: https://dheena731.github.io/Ml-env-doctor/
+repo_url: https://github.com/Dheena731/Ml-env-doctor
+edit_uri: edit/master/docs/
 
 theme:
   name: material
@@ -75,7 +75,7 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/dhinakaran/mlenvdoctor
+      link: https://github.com/Dheena731/Ml-env-doctor
   generator: false
 
 extra_javascript:

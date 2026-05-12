@@ -51,8 +51,8 @@ mlenvdoctor diagnose --full
 ## Development Setup
 
 ```bash
-git clone https://github.com/dhinakaran/mlenvdoctor.git
-cd mlenvdoctor
+git clone https://github.com/Dheena731/Ml-env-doctor.git
+cd Ml-env-doctor
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install -e ".[dev]"
