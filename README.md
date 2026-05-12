@@ -4,9 +4,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI](https://img.shields.io/pypi/v/mlenvdoctor.svg)](https://pypi.org/project/mlenvdoctor/)
 [![CI](https://github.com/Dheena731/Ml-env-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/Dheena731/Ml-env-doctor/actions/workflows/ci.yml)
-[![PyPI - Downloads](https://static.pepy.tech/badge/mlenvdoctor)](https://pepy.tech/project/mlenvdoctor)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mlenvdoctor)](https://pypi.org/project/mlenvdoctor/)
-[![codecov](https://codecov.io/gh/Dheena731/Ml-env-doctor/branch/master/graph/badge.svg)](https://codecov.io/gh/Dheena731/Ml-env-doctor)
 
 > Diagnose ML environment issues, export shareable reports, and generate safe starting fixes.
 
