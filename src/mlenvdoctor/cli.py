@@ -44,6 +44,9 @@ def _patch_typer_click_metavar_compat() -> None:
     if getattr(click.core.Parameter.make_metavar, "__mlenvdoctor_compat__", False):
         return
 
+    if not hasattr(TyperArgument, "deprecated"):
+        TyperArgument.deprecated = False  # type: ignore[attr-defined]
+
     original_parameter_make_metavar = click.core.Parameter.make_metavar
     # Detect whether this Click version's make_metavar accepts a ctx arg.
     _param_sig = inspect.signature(original_parameter_make_metavar)
