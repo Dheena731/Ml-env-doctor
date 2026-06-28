@@ -41,4 +41,3 @@ mlenvdoctor dockerize [MODEL] [--service] [--stack STACK] [--base-image IMAGE] [
 ```bash
 mlenvdoctor mcp serve
 ```
-

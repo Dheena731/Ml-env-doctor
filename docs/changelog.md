@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Refreshed the dependency lockfile and pre-commit hook pins.
+- Reorganized the documentation navigation around user guides and reference pages.
+- Removed tracked generated report/export artifacts and internal planning notes from the docs tree.
+
 ## 0.1.5
 
 - Added guided doctor summaries for beginner-friendly recovery.

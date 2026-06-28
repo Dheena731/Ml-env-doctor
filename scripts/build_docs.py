@@ -1,7 +1,7 @@
-import os
 import re
 import shutil
 from pathlib import Path
+
 import markdown
 
 DOCS_DIR = Path("docs")
@@ -21,7 +21,7 @@ body {
     margin: 0;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background-color: var(--bg-color);
-    background-image: 
+    background-image:
         radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
         radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%);
     background-attachment: fixed;
@@ -182,9 +182,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 """
 
+
 def generate_nav(out_dir_depth):
     prefix = "../" * out_dir_depth
-    
+
     # Collect files
     items = []
     for p in DOCS_DIR.rglob("*.md"):
@@ -194,18 +195,20 @@ def generate_nav(out_dir_depth):
         if p.stem == "index":
             name = "Home" if p.parent == DOCS_DIR else p.parent.name.title() + " Home"
         items.append((str(rel_path.parent), name, html_path))
-    
+
     # Group by directory
     groups = {}
     for dirname, name, html_path in items:
-        group_name = "Overview" if dirname == "." else dirname.replace("-", " ").replace("_", " ").title()
+        group_name = (
+            "Overview" if dirname == "." else dirname.replace("-", " ").replace("_", " ").title()
+        )
         if group_name not in groups:
             groups[group_name] = []
         groups[group_name].append((name, html_path))
-    
+
     # Build HTML
     nav_html = "<h2>ML Env Doctor</h2>"
-    
+
     # Ensure "Overview" is first
     group_keys = list(groups.keys())
     if "Overview" in group_keys:
@@ -219,39 +222,40 @@ def generate_nav(out_dir_depth):
         for name, html_path in sorted(groups[group], key=lambda x: x[0]):
             nav_html += f"<li><a href='{prefix}{html_path}'>{name}</a></li>"
         nav_html += "</ul>"
-        
+
     return nav_html
+
 
 def build_docs():
     if OUT_DIR.exists():
         shutil.rmtree(OUT_DIR)
     OUT_DIR.mkdir()
-    
+
     (OUT_DIR / "styles.css").write_text(CSS, encoding="utf-8")
     (OUT_DIR / "script.js").write_text(JS, encoding="utf-8")
     (OUT_DIR / ".nojekyll").write_text("", encoding="utf-8")
-    
+
     for p in DOCS_DIR.rglob("*.md"):
         rel_path = p.relative_to(DOCS_DIR)
         out_path = OUT_DIR / rel_path.with_suffix(".html")
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         content = p.read_text(encoding="utf-8")
-        
+
         # Replace .md links with .html links
-        content = re.sub(r'\]\(([^)]+)\.md([^)]*)\)', r'](\1.html\2)', content)
-        
-        md = markdown.Markdown(extensions=['fenced_code', 'codehilite', 'tables', 'toc'])
+        content = re.sub(r"\]\(([^)]+)\.md([^)]*)\)", r"](\1.html\2)", content)
+
+        md = markdown.Markdown(extensions=["fenced_code", "codehilite", "tables", "toc"])
         html_content = md.convert(content)
-        
+
         depth = len(rel_path.parts) - 1
         prefix = "../" * depth
         nav = generate_nav(depth)
-        
+
         title = p.stem.replace("-", " ").replace("_", " ").title()
         if p.stem == "index":
             title = "ML Environment Doctor"
-            
+
         full_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -273,9 +277,10 @@ def build_docs():
     <script src="{prefix}script.js"></script>
 </body>
 </html>"""
-        
+
         out_path.write_text(full_html, encoding="utf-8")
         print(f"Built {out_path}")
+
 
 if __name__ == "__main__":
     build_docs()

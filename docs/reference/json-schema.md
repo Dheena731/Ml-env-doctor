@@ -27,4 +27,3 @@ Each issue includes:
 - `confidence`, `evidence`
 - `mismatch_code` (when applicable)
 - `metadata`
-

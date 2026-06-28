@@ -59,12 +59,24 @@ issues.append(
 ## Test Before Opening a PR
 
 ```bash
-python -m black src tests
+uv lock --check
+python -m black --check src tests
 python -m ruff check src tests
 python -m pytest
 python -m pip install -r requirements-docs.txt
 mkdocs build --strict
 ```
+
+## Refresh Dependencies
+
+Use the lockfile as the reproducible dependency plan for local development and CI debugging:
+
+```bash
+uv lock --upgrade
+python -m pre_commit autoupdate
+```
+
+After refreshing dependencies, rerun tests and the strict docs build before committing. Keep runtime dependency ranges in `pyproject.toml` broad enough for supported Python versions unless a package requires a higher floor for correctness or security.
 
 ## Documentation Preview
 

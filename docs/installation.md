@@ -79,4 +79,6 @@ python -m pip install -r requirements-docs.txt
 mkdocs serve
 ```
 
+`requirements-docs.txt` installs the project `docs` extra, so documentation dependencies stay aligned with `pyproject.toml`.
+
 The local preview opens at `http://127.0.0.1:8000/`.
