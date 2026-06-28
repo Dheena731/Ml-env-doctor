@@ -6,6 +6,14 @@
 - Added `mlenvdoctor doctor --json` for compact machine-readable triage summaries.
 - Aligned MCP `doctor_summary` responses with the shared doctor summary payload.
 
+## 0.1.6
+
+- Restored Python 3.8 import compatibility for annotation-heavy modules.
+- Declared the direct Click runtime dependency required by the CLI entry point.
+- Fixed homepage action buttons so they navigate to deployed `.html` pages instead of 404 routes.
+- Improved homepage button dimensions, spacing, hover, and focus states.
+- Trimmed source distribution file selection to project sources, tests, docs, and release metadata.
+
 ## 0.1.5
 
 - Added guided doctor summaries for beginner-friendly recovery.

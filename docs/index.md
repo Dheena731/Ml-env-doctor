@@ -1,4 +1,4 @@
-# ML Environment Doctor <small>v0.1.5</small>
+# ML Environment Doctor <small>v0.1.6</small>
 
 <div class="hero-grid">
   <div class="hero-copy">

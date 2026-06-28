@@ -5,6 +5,18 @@ All notable changes to ML Environment Doctor are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-06-28
+
+### Fixed
+- Restored Python 3.8 import compatibility for annotations used across core modules and tests.
+- Declared the direct Click runtime dependency required by the CLI entry point.
+- Fixed the GitHub Pages homepage action buttons so `Start diagnosing` and `View checks` navigate to deployed pages instead of 404 routes.
+
+### Changed
+- Switched MkDocs output to explicit `.html` URLs for stable project-page navigation.
+- Improved homepage button alignment, spacing, hover, and focus states.
+- Trimmed source distribution file selection to project sources, tests, docs, and release metadata.
+
 ## [0.1.5] - 2026-04-09
 
 ### Added
