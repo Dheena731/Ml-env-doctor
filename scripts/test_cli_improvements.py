@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Test script to verify CLI improvements."""
 
+from __future__ import annotations
+
 import json
 import subprocess
 import sys

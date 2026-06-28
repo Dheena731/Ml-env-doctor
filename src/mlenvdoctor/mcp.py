@@ -1,5 +1,7 @@
 """Minimal JSON-lines MCP server for ML Environment Doctor."""
 
+from __future__ import annotations
+
 import json
 import sys
 from typing import Any, Dict

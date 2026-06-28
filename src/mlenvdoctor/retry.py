@@ -1,5 +1,7 @@
 """Retry logic for transient failures."""
 
+from __future__ import annotations
+
 import functools
 import time
 from typing import Any, Callable, Optional, TypeVar

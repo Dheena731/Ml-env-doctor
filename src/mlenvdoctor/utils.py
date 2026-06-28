@@ -1,5 +1,7 @@
 """Shared utilities for ML Environment Doctor."""
 
+from __future__ import annotations
+
 import subprocess
 import sys
 from contextlib import nullcontext
