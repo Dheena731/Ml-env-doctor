@@ -34,6 +34,12 @@ mlenvdoctor exposes a CLI for daily use and a small Python API for tools that ne
     mlenvdoctor doctor --ci
     ```
 
+=== "Automation JSON"
+
+    ```bash
+    mlenvdoctor doctor --json
+    ```
+
 ## Guided Recovery
 
 ```bash
@@ -67,4 +73,4 @@ The API returns `DiagnosticIssue` objects with stable fields:
 | `evidence` | Short evidence lines collected during the check |
 
 !!! info "Use JSON for external automation"
-    If another tool does not need Python objects, prefer `mlenvdoctor diagnose --json -` for a clean machine-readable stream.
+    Use `mlenvdoctor doctor --json` for compact triage. Use `mlenvdoctor diagnose --json -` when another tool needs all raw checks.

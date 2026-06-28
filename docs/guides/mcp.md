@@ -29,4 +29,12 @@ These are supported as stable aliases:
 
 ## Recommended payload for assistants
 
-Use `export_report` (or `report_bundle`) to get:\n\n- summary counts\n- runtime context\n- doctor summary\n- fixes\n- exit code\n+
+Use `doctor_summary` when you need the top triage result, runtime context, exit code, top fix, and verification step.
+
+Use `export_report` or `report_bundle` when you need:
+
+- summary counts
+- runtime context
+- doctor summary
+- fixes
+- exit code

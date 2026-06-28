@@ -39,6 +39,7 @@ pip install mlenvdoctor
 mlenvdoctor diagnose
 mlenvdoctor diagnose --full
 mlenvdoctor diagnose --json -
+mlenvdoctor doctor --json
 mlenvdoctor report
 mlenvdoctor fix --plan
 mlenvdoctor fix --dry-run
@@ -80,6 +81,7 @@ Compact CI-friendly output:
 mlenvdoctor doctor --ci
 mlenvdoctor doctor --ci --full
 mlenvdoctor doctor --guided
+mlenvdoctor doctor --json
 ```
 
 ### Report

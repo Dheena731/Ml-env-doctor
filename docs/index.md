@@ -50,6 +50,7 @@ mlenvdoctor report               # 3. Generate JSON + HTML evidence
 | Task | Command |
 | --- | --- |
 | Beginner-friendly recovery | `mlenvdoctor doctor --guided` |
+| Automation-friendly triage | `mlenvdoctor doctor --json` |
 | Full diagnostic table | `mlenvdoctor diagnose --full` |
 | Machine-readable CI output | `mlenvdoctor doctor --ci` |
 | JSON, CSV, or HTML evidence | `mlenvdoctor diagnose --json issues.json --html issues.html` |

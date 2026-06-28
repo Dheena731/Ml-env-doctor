@@ -184,6 +184,21 @@ def test_doctor_command(monkeypatch):
     assert "ISSUE PyTorch CUDA" in result.stdout
 
 
+def test_doctor_json_output(monkeypatch):
+    """Doctor JSON mode should emit parseable compact triage data."""
+    monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())
+    result = runner.invoke(app, ["doctor", "--json"])
+
+    assert result.exit_code == 2
+    payload = json.loads(result.stdout)
+    assert payload["schema_version"] == "1.0"
+    assert payload["exit_code"] == 2
+    assert payload["summary"]["critical"] == 1
+    assert payload["doctor_summary"][0]["problem"] == "PyTorch CUDA"
+    assert payload["top_fix"]
+    assert "Diagnostic Results" not in result.stdout
+
+
 def test_doctor_human_output_is_summary_not_table(monkeypatch):
     """Doctor should print a triage summary rather than the diagnose table."""
     monkeypatch.setattr("mlenvdoctor.cli.diagnose_env", lambda **kwargs: _sample_issues())

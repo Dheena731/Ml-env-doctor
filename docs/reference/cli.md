@@ -9,7 +9,7 @@ mlenvdoctor diagnose [--full] [--json PATH|-] [--csv PATH] [--html PATH]
 ## `mlenvdoctor doctor`
 
 ```bash
-mlenvdoctor doctor [--ci] [--guided] [--full]
+mlenvdoctor doctor [--ci] [--guided] [--json] [--full]
 ```
 
 ## `mlenvdoctor report`

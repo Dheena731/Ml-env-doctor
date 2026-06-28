@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Started the 0.2.0 automation-ready triage plan.
+- Added `mlenvdoctor doctor --json` for compact machine-readable triage summaries.
+- Aligned MCP `doctor_summary` responses with the shared doctor summary payload.
+
 ## 0.1.5
 
 - Added guided doctor summaries for beginner-friendly recovery.

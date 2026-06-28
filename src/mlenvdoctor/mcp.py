@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from . import __version__
 from .diagnose import diagnose_env, get_fix_commands
-from .export import DOCTOR_SUMMARY_SCHEMA_VERSION, build_export_data
+from .export import build_doctor_summary_data, build_export_data
 
 MCP_SCHEMA_VERSION = "0.2"
 MCP_CONTRACT_VERSION = "1.0"
@@ -175,17 +175,11 @@ def _handle_request(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     if canonical_tool == "doctor_summary":
         issues = diagnose_env(full=full, show_header=False)
-        export_data = build_export_data(issues, include_metadata=True)
         return {
             "ok": True,
             "tool": str(tool_name),
             "canonical_tool": "doctor_summary",
-            "result": {
-                "schema_version": DOCTOR_SUMMARY_SCHEMA_VERSION,
-                "doctor_summary": export_data["doctor_summary"],
-                "runtime_context": export_data["runtime_context"],
-                "exit_code": build_export_data(issues, include_metadata=False)["exit_code"],
-            },
+            "result": build_doctor_summary_data(issues, include_metadata=True),
         }
 
     if canonical_tool == "report_bundle":

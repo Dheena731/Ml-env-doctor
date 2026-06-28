@@ -124,6 +124,40 @@ def build_export_data(
     return export_data
 
 
+def build_doctor_summary_data(
+    issues: List[DiagnosticIssue],
+    include_metadata: bool = True,
+) -> Dict[str, Any]:
+    """Build the compact machine-readable doctor payload."""
+    findings = summarize_for_doctor(issues)
+    top_finding = findings[0] if findings else None
+    doctor_data: Dict[str, Any] = {
+        "schema_version": DOCTOR_SUMMARY_SCHEMA_VERSION,
+        "doctor_summary": [doctor_finding_to_dict(finding) for finding in findings],
+        "runtime_context": build_runtime_context(issues),
+        "summary": build_summary(issues),
+        "exit_code": get_exit_code(issues),
+        "top_fix": top_finding.best_fix if top_finding is not None else None,
+        "next_verify_step": (
+            top_finding.verify_steps[0]
+            if top_finding is not None and top_finding.verify_steps
+            else None
+        ),
+    }
+
+    if include_metadata:
+        from . import __version__
+
+        doctor_data["metadata"] = {
+            "version": __version__,
+            "schema_version": DOCTOR_SUMMARY_SCHEMA_VERSION,
+            "timestamp": datetime.now().isoformat(),
+            "tool": "mlenvdoctor",
+        }
+
+    return doctor_data
+
+
 def export_json(
     issues: List[DiagnosticIssue],
     output_file: Optional[Path] = None,

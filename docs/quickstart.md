@@ -56,6 +56,7 @@ mlenvdoctor fix --verify
 
 ```bash
 mlenvdoctor doctor --ci
+mlenvdoctor doctor --json
 ```
 
 The command returns a non-zero exit code when critical environment issues are present, so it can fail a workflow before training starts.

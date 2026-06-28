@@ -28,3 +28,22 @@ Each issue includes:
 - `mismatch_code` (when applicable)
 - `metadata`
 
+## `doctor --json` shape
+
+When you run:
+
+```bash
+mlenvdoctor doctor --json
+```
+
+You receive a compact JSON object for triage automation:
+
+- `schema_version`: doctor summary schema version
+- `doctor_summary`: prioritized root-cause findings
+- `runtime_context`: platform/backend summary
+- `summary`: counts (passed/warnings/critical/total)
+- `exit_code`: stable exit code (0/1/2)
+- `top_fix`: best next action from the highest-priority finding
+- `next_verify_step`: first verification command for the top finding
+- `metadata`: tool version, schema version, timestamp
+

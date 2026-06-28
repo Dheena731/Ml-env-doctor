@@ -15,7 +15,10 @@ Examples:
 mlenvdoctor doctor
 mlenvdoctor doctor --ci
 mlenvdoctor doctor --guided
+mlenvdoctor doctor --json
 ```
+
+Use `doctor --json` when automation needs only the prioritized triage summary, top fix, and first verification step.
 
 ## `diagnose` (evidence)
 

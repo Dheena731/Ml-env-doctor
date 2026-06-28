@@ -13,7 +13,14 @@ from typer.core import TyperArgument
 from . import __version__
 from .diagnose import diagnose_env, get_fix_commands, print_diagnostic_table, summarize_for_doctor
 from .dockerize import generate_dockerfile, generate_service_template
-from .export import build_export_data, export_csv, export_html, export_json, get_exit_code
+from .export import (
+    build_doctor_summary_data,
+    build_export_data,
+    export_csv,
+    export_html,
+    export_json,
+    get_exit_code,
+)
 from .fix import auto_fix, get_stack_requirements, rollback_last_fix
 from .gpu import benchmark_gpu_ops, smoke_test_lora
 from .gpu import test_model as gpu_test_model
@@ -267,6 +274,11 @@ def doctor(
     guided: bool = typer.Option(
         False, "--guided", help="Show beginner-friendly one-step recovery guidance"
     ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON summary for automation",
+    ),
     full: bool = typer.Option(
         False, "--full", "-f", help="Run full diagnostics including GPU benchmarks"
     ),
@@ -277,11 +289,14 @@ def doctor(
     Use this command for a compact, opinionated summary:
     what failed, the likely cause, the best next step, and how to verify it.
     """
-    issues = diagnose_env(full=full, show_header=not ci)
+    machine_output = ci or json_output
+    issues = diagnose_env(full=full, show_header=not machine_output)
     exit_code = get_exit_code(issues)
     findings = summarize_for_doctor(issues)
 
-    if ci:
+    if json_output:
+        typer.echo(json.dumps(build_doctor_summary_data(issues), ensure_ascii=False))
+    elif ci:
         payload = build_export_data(issues, include_metadata=True)
         summary = payload["summary"]
         typer.echo(

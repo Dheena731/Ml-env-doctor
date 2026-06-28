@@ -3,7 +3,12 @@
 from pathlib import Path
 
 from mlenvdoctor.diagnose import DiagnosticIssue
-from mlenvdoctor.export import build_export_data, export_html, get_exit_code
+from mlenvdoctor.export import (
+    build_doctor_summary_data,
+    build_export_data,
+    export_html,
+    get_exit_code,
+)
 from mlenvdoctor.mcp import _handle_request
 from mlenvdoctor.utils import (
     check_command_exists,
@@ -105,6 +110,28 @@ def test_build_export_data_includes_runtime_context_from_accelerator_backend():
     assert data["runtime_context"]["platform"] == "linux"
     assert data["runtime_context"]["backend"] == "cuda"
     assert data["runtime_context"]["nvidia_tooling"] is True
+
+
+def test_build_doctor_summary_data_exposes_top_action():
+    """Doctor JSON payload should expose the top fix and verification step."""
+    issues = [
+        DiagnosticIssue(
+            "Torch",
+            "FAIL - missing",
+            "critical",
+            "pip install torch",
+            verify_steps=['python -c "import torch"'],
+        )
+    ]
+
+    data = build_doctor_summary_data(issues, include_metadata=False)
+
+    assert data["schema_version"] == "1.0"
+    assert data["exit_code"] == 2
+    assert data["summary"]["critical"] == 1
+    assert data["doctor_summary"][0]["problem"] == "Torch"
+    assert data["top_fix"] == "pip install torch"
+    assert data["next_verify_step"] == 'python -c "import torch"'
 
 
 def test_get_exit_code_prefers_critical_over_warning():
@@ -211,5 +238,7 @@ def test_mcp_stub_doctor_summary_uses_shared_summary_shape(monkeypatch):
 
     assert response["ok"] is True
     assert response["result"]["schema_version"] == "1.0"
+    assert response["result"]["summary"]["critical"] == 1
+    assert response["result"]["top_fix"] == "pip install torch"
     assert response["result"]["doctor_summary"][0]["problem"] == "Torch"
     assert "confidence" in response["result"]["doctor_summary"][0]
