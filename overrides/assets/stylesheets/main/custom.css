@@ -85,8 +85,18 @@ body {
 
 .md-typeset .md-button {
   border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
   padding: 0.72rem 1rem;
+  text-align: center;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .md-typeset .md-button--primary {
@@ -95,9 +105,45 @@ body {
   color: #fff;
 }
 
-.md-typeset .md-button--primary:hover {
+.md-typeset .md-button--primary:hover,
+.md-typeset .md-button--primary:focus-visible {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
+}
+
+.md-typeset .md-button:hover,
+.md-typeset .md-button:focus-visible {
+  box-shadow: 0 0.35rem 0.9rem var(--color-shadow);
+  transform: translateY(-1px);
+}
+
+.md-typeset .md-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 34%, transparent);
+  outline-offset: 3px;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+}
+
+.md-typeset .hero-action {
+  min-width: 10.75rem;
+}
+
+.md-typeset .hero-action--secondary {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border);
+  color: var(--color-primary);
+}
+
+.md-typeset .hero-action--secondary:hover,
+.md-typeset .hero-action--secondary:focus-visible {
+  background: var(--color-surface-muted);
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
 }
 
 .hero-grid {
@@ -211,5 +257,14 @@ body {
 
   .hero-copy p {
     font-size: 1rem;
+  }
+
+  .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .md-typeset .hero-action {
+    width: 100%;
   }
 }

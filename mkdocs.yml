@@ -3,6 +3,7 @@ site_description: "ML Environment Diagnostics - 47+ checks in 12 seconds"
 site_url: https://dheena731.github.io/Ml-env-doctor/
 repo_url: https://github.com/Dheena731/Ml-env-doctor
 edit_uri: edit/master/docs/
+use_directory_urls: false
 
 theme:
   name: material

@@ -10,10 +10,10 @@ pip install mlenvdoctor
 mlenvdoctor doctor --guided
 ```
 
-  <p>
-    <a class="md-button md-button--primary" href="quickstart/">Start diagnosing</a>
-    <a class="md-button" href="checks/">View checks</a>
-  </p>
+  <div class="hero-actions" aria-label="Primary documentation actions">
+    <a class="md-button md-button--primary hero-action" href="quickstart.html">Start diagnosing</a>
+    <a class="md-button hero-action hero-action--secondary" href="checks.html">View checks</a>
+  </div>
   </div>
   <figure class="hero-terminal">
     <img src="assets/hero-terminal.png" alt="Terminal screenshot showing mlenvdoctor diagnosing CUDA, PyTorch, and Pipenv issues">
