@@ -32,14 +32,14 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: `mlenvdoctor doctor --ci` output
+      label: "`mlenvdoctor doctor --ci` output"
       render: shell
     validations:
       required: true
   - type: textarea
     id: diagnose_json
     attributes:
-      label: `mlenvdoctor diagnose --json -` output
+      label: "`mlenvdoctor diagnose --json -` output"
       description: Paste the JSON payload (or attach as file)
       render: json
     validations:

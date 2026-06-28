@@ -205,12 +205,13 @@ pip install -e ".[dev]"
 python -m black src tests
 python -m ruff check src tests
 python -m pytest
-python -m mypy src
+python -m mypy src  # advisory until the type backlog is cleared
 ```
 
 ## CI/CD and Release Flow
 
 - CI runs formatting (`black --check`), lint (`ruff`), tests (`pytest`), and package build checks (`python -m build`, `twine check`) on every push/PR.
+- Mypy runs as an advisory check while the Python 3.8 compatibility and typing backlog is reduced.
 - The matrix tests Linux (3.8-3.11), macOS (3.11), and Windows (3.11).
 - A tagged GitHub release triggers the publish job to upload built artifacts to PyPI.
 - If CI fails locally vs. GitHub, run these exact commands first:
@@ -240,12 +241,8 @@ This keeps the main test suite independent from whether `mlenvdoctor` was instal
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers local setup and contribution flow
 - [IMPROVEMENTS.md](IMPROVEMENTS.md) tracks active improvement themes
-- [IMPROVEMENTS_ROADMAP.md](IMPROVEMENTS_ROADMAP.md) outlines future milestones
-- [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) explains the current project architecture and product shape
-- [docs/FAILURE_TAXONOMY.md](docs/FAILURE_TAXONOMY.md) defines prioritized mismatch codes used by diagnostics and MCP
-- [docs/KILLER_PRODUCT_PLAN.md](docs/KILLER_PRODUCT_PLAN.md) is the strategic roadmap for turning the project into a category-leading product
-- [docs/PHASED_EXECUTION_PLAN.md](docs/PHASED_EXECUTION_PLAN.md) breaks the strategy into execution phases and current build focus
-- [docs/CASE_STUDY_TEMPLATE.md](docs/CASE_STUDY_TEMPLATE.md) helps publish real failure-to-fix stories for user onboarding
+- [docs/dependency-maintenance.md](docs/dependency-maintenance.md) documents the dependency refresh process
+- [docs/reference/mismatch-codes.md](docs/reference/mismatch-codes.md) defines prioritized mismatch codes used by diagnostics and MCP
 - [docker/README.md](docker/README.md) documents Docker-specific workflows
 
 ## License

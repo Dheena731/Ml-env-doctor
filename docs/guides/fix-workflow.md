@@ -34,4 +34,3 @@ If a fix wrote files (for example requirements/environment files) and you want t
 ```bash
 mlenvdoctor fix --rollback
 ```
-

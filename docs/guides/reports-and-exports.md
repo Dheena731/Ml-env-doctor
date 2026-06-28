@@ -1,4 +1,4 @@
-# Reports and exports
+# Reports and Exports
 
 ## Export from `diagnose`
 
@@ -8,17 +8,26 @@ mlenvdoctor diagnose --csv diagnostics.csv
 mlenvdoctor diagnose --html diagnostics.html
 ```
 
-## Shareable bundle from `report`
+## Shareable Bundle from `report`
 
 ```bash
 mlenvdoctor report
 mlenvdoctor report --quick --output-dir artifacts/mlenvdoctor
 ```
 
-## Machine-readable JSON
+## Machine-Readable JSON
 
 ```bash
 mlenvdoctor diagnose --json -
 ```
 
-The JSON includes:\n\n- issues (with `check_id`, `category`, `confidence`, `evidence`, and `mismatch_code`)\n- `doctor_summary`\n- `runtime_context`\n- `summary` counts\n- `exit_code`\n- suggested `fixes`\n+
+The JSON includes:
+
+- issues with `check_id`, `category`, `confidence`, `evidence`, and `mismatch_code`
+- `doctor_summary`
+- `runtime_context`
+- `summary` counts
+- `exit_code`
+- suggested `fixes`
+
+Generated reports are local artifacts. Keep them out of git unless a test fixture explicitly needs one.

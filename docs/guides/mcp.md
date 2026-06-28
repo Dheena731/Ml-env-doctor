@@ -1,14 +1,14 @@
-# MCP integration
+# MCP Integration
 
 `mlenvdoctor mcp serve` provides a JSON-lines interface over stdin/stdout.
 
-## Start the server
+## Start the Server
 
 ```bash
 mlenvdoctor mcp serve
 ```
 
-## Discover tools
+## Discover Tools
 
 ```json
 {"tool":"list_tools","arguments":{}}
@@ -18,7 +18,7 @@ mlenvdoctor mcp serve
 {"tool":"tool_schema","arguments":{"name":"export_report"}}
 ```
 
-## v1 alias tools
+## v1 Alias Tools
 
 These are supported as stable aliases:
 
@@ -27,6 +27,12 @@ These are supported as stable aliases:
 - `verify_fix` (alias for `doctor_summary`)
 - `export_report` (alias for `report_bundle`)
 
-## Recommended payload for assistants
+## Recommended Payload for Assistants
 
-Use `export_report` (or `report_bundle`) to get:\n\n- summary counts\n- runtime context\n- doctor summary\n- fixes\n- exit code\n+
+Use `export_report` or `report_bundle` to get:
+
+- summary counts
+- runtime context
+- doctor summary
+- fixes
+- exit code

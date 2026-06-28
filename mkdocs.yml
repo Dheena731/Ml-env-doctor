@@ -86,8 +86,21 @@ nav:
   - Installation: installation.md
   - Quickstart: quickstart.md
   - Usage: usage.md
+  - Guides:
+      - Diagnose and Doctor: guides/diagnose-and-doctor.md
+      - Fix Workflow: guides/fix-workflow.md
+      - Reports and Exports: guides/reports-and-exports.md
+      - Dockerize: guides/dockerize.md
+      - MCP Integration: guides/mcp.md
   - Checks: checks.md
-  - API: api/index.md
+  - Reference:
+      - CLI: reference/cli.md
+      - JSON Schema: reference/json-schema.md
+      - Mismatch Codes: reference/mismatch-codes.md
+      - Python API: api/index.md
   - Troubleshooting: troubleshooting.md
-  - Contributing: contributing.md
+  - FAQ: faq.md
+  - Contributing:
+      - Contributor Guide: contributing.md
+      - Dependency Maintenance: dependency-maintenance.md
   - Changelog: changelog.md

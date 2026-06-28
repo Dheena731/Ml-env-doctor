@@ -33,4 +33,3 @@ mlenvdoctor diagnose --json diagnostics.json --csv diagnostics.csv --html diagno
 - `0`: no warnings or critical issues
 - `1`: warnings present
 - `2`: critical issues present
-

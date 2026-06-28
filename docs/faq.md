@@ -29,4 +29,3 @@ mlenvdoctor diagnose --json diagnostics.json
 ```
 
 See the workflow template in `.github/workflows/mlenvdoctor-user-ci-template.yml`.
-
